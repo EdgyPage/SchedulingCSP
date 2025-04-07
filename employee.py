@@ -10,6 +10,14 @@ class Employee:
     def id(self):
         return self._id
 
+    @property
+    def indexApprovedTasks(self):
+        return self._indexApprovedTasks
+    
+    @property
+    def numApprovedtasks(self):
+        return self._numApprovedTasks
+    
     @id.setter
     def id(self, value: str):
         self._id = value
