@@ -1,8 +1,8 @@
 import employee as e
 
 class Schedule:
-    def __init__(taskMins: list[int], employees: list[e.Employee]):
-        taskAssignments = {
+    def __init__(self, taskMins: list[int], unassignedEmployees: list[e.Employee]):
+        self._taskAssignments = {
             'task1': [],
             'task2': [],
             'task3': [],
@@ -12,8 +12,10 @@ class Schedule:
             'task7': []
         }
 
-        unassignedEmployees = []
+        self._unassignedEmployees = unassignedEmployees
 
-        
-
-        pass
+        @unassignedEmployees.setter
+        def unassignedEmployees(self, employees):
+            
+            for employee in employees:
+                    pass
