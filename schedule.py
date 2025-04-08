@@ -1,10 +1,40 @@
 import employee as e
+import constraints as c
 
 class Schedule:
-    def __init__(self, taskMins: list[int], employeesToAssign: list[e.Employee]):
+    def __init__(self, employeesToAssign: list[e.Employee], constraints: c.Constraints):
         self._employeesToAssign = employeesToAssign
         self._taskAssignments = employeesToAssign[0].taskStatuses
+        self._constraints = constraints
 
+    @property
+    def constraints(self):
+         return self._constraints
+
+    def __repr__(self):
+         return self.taskAssignments
+    
+    @property
+    def getAttributes(self):
+         return vars(self)
+
+    def __eq__(self, other):
+         flag = True
+         if not isinstance(other, Schedule):
+              flag = False
+              return flag
+         selfAttributes = self.getAttributes()
+         otherAttributes = other.getAttributes()
+         flag = selfAttributes == otherAttributes
+         return flag
+    
+    def __hash__(self):
+         hashable = tuple()
+         for key, values in self.taskAssignments.items():
+              hashable = hashable + (key, )
+              for value in values:
+                   hashable = hashable + (value,)
+         return hash(hashable)
 
     @property
     def taskAssignments(self):
@@ -26,4 +56,10 @@ class Schedule:
                 numApprovals = employee.numApprovedTasks
                 employeeList[numApprovals].append(employee)
         self._employeesToAssign = employeeList
-                         
+
+    def test():
+         pass
+
+    def findAssignment():
+         pass
+    
