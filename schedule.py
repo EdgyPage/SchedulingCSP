@@ -1,10 +1,11 @@
 import employee as e
 import constraints as c
+import random as r
 
 class Schedule:
     def __init__(self, employeesToAssign: list[e.Employee], constraints: c.Constraints):
         self._employeesToAssign = employeesToAssign
-        self._taskAssignments = employeesToAssign[0].taskStatuses
+        self._taskAssignments = self.employeesToAssign[0].taskStatuses
         self._constraints = constraints
 
     @property
@@ -41,8 +42,9 @@ class Schedule:
         return self._taskAssignments
     
     @taskAssignments.setter
-    def taskAssignments(self, numTasks):
-        taskAssignments = {f'task{i}' : [] for i in range(numTasks+1)}
+    def taskAssignments(self, taskStatuses):
+        amountOfApprovals = len(taskStatuses) + 1
+        taskAssignments = {f'task{i}' : [] for i in range(amountOfApprovals)}
         self._taskAssignments = taskAssignments
 
     @property
@@ -55,10 +57,14 @@ class Schedule:
         for employee in employees:
                 numApprovals = employee.numApprovedTasks
                 employeeList[numApprovals].append(employee)
+        for innerList in employeeList:
+             r.shuffle(innerList)
         self._employeesToAssign = employeeList
 
     def test():
          pass
+     
+
 
     def findAssignment():
          pass
