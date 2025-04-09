@@ -1,11 +1,12 @@
 import employee as e
 import constraints as c
 import random as r
+import copy
 
 class Schedule:
      def __init__(self, employeesToAssign: list[e.Employee], constraints: c.Constraints):
          self._employeesToAssign = employeesToAssign
-         self._taskAssignments = self.employeesToAssign[0].taskStatuses
+         self._taskAssignments = self.taskAssignments(self.employeesToAssign[0].taskStatuses)
          self._constraints = constraints
  
      @property
@@ -41,7 +42,7 @@ class Schedule:
      def taskAssignments(self):
          return self._taskAssignments
      
-     @taskAssignments.setter
+     #@taskAssignments.setter
      def taskAssignments(self, taskStatuses):
          amountOfApprovals = len(taskStatuses) + 1
          taskAssignments = {f'task{i}' : [] for i in range(amountOfApprovals)}
@@ -71,11 +72,19 @@ class Schedule:
           return func
 
      @partialTestDecorator
-     @fullTestDecorator
-     def testLength(self):
+     def testLengthPartial(self):
           flag = True
           for i, value in enumerate(self.taskAssignments.values()):
                if self.constraints.taskMins[i] >= len(value):
+                    flag = False
+                    return flag
+          return flag
+     
+     @fullTestDecorator
+     def testLengthFull(self):
+          flag = True
+          for i, value in enumerate(self.taskAssignments.values()[1:]):
+               if self.constraints.taskMins[i] != len(value):
                     flag = False
                     return flag
           return flag
@@ -102,6 +111,30 @@ class Schedule:
                     return False
           return True
       
-     def findAssignment():
-         pass
+     def findAssignment(self, employees: list[e.Employee], validSchedules: list):
+         flag = True
+         if employees:
+              for employee in employees:
+                    updateEmployees = employees[1:]
+                    if employee.numApprovedtasks > 0:
+                         for i in employee.indexApprovedTasks:
+                              key = list(self.taskAssignments.keys())[i]
+                              self.taskAssignments[key].append(employee)
+                              if self.partialTest():
+                                   if self.fullTest():
+                                        validSchedules.append(copy.deepcopy(self))
+                                   self.findAssignment(updateEmployees, validSchedules)
+                              self.taskAssignments = self.taskAssignments[key].pop()
+                              if key == list(self.taskAssignments.keys())[-1]:
+                                   flag = False
+                         if not flag:
+                              break
+                    else:
+                         key = list(self.taskAssignments.keys())[0]
+                         self.taskAssignments[key].append(employee)
+                         if self.fullTest():
+                              validSchedules.append(copy.deepcopy(self))
+                         self.findAssignment(updateEmployees, validSchedules)
+                         
+
     

@@ -1,10 +1,10 @@
 class Employee:
-    def __init__(self, id: str, name: str, tasks: list[str]):
+    def __init__(self, id: str, name: str, taskStatuses: list[bool]):
         self._id = id
         self._name = name
-        self._taskStatuses = tasks
+        self._taskStatuses = taskStatuses
         self._numApprovedTasks = 0
-        self._indexApprovedTasks = []
+        self._indexApprovedTasks = [0]
 
     @property
     def id(self):
@@ -31,24 +31,24 @@ class Employee:
         self._name = value.lower()
 
     @property
-    def tasks(self):
+    def taskStatuses(self):
         return self._taskStatuses
     
-    @tasks.setter
-    def tasks(self, value: list[str]):
+    @taskStatuses.setter
+    def taskStatuses(self, value: list[bool]):
         n = len(value)
         statuses = [False] * n
         for i in range(n):
-            if value[i] == "TRUE":
+            if value[i] == True:
                 statuses[i] = True
                 self._numApprovedTasks += 1
                 self._indexApprovedTasks.append(i)
         self._taskStatuses = statuses
 
     def __repr__(self):
-        return {'id': self.id ,
-                 'name': self.name,
-                 'taskStatuses': self._taskStatuses}
+        return f''''id': {self.id} , 
+                 'name': {self.name}, 
+                 'taskStatuses': {self._taskStatuses}'''
     
     def __eq__(self, otherEmployee):
         flag = True
