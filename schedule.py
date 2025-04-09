@@ -62,17 +62,46 @@ class Schedule:
          employeeList = [employee for innerList in employeeList for employee in innerList]
          self._employeesToAssign = employeeList
      
-     def assignment(employee: e.Employee, taskAssignments: dict):
-          pass
+     def partialTestDecorator(func):
+          func.isPartialTest = True
+          return func
+     
+     def fullTestDecorator(func):
+          func.isFullTest = True
+          return func
 
-     def partialTest():
-          pass
+     @partialTestDecorator
+     @fullTestDecorator
+     def testLength(self):
+          flag = True
+          for i, value in enumerate(self.taskAssignments.values()):
+               if self.constraints.taskMins[i] >= len(value):
+                    flag = False
+                    return flag
+          return flag
+
+     def partialTest(self):
+          results = {}
+          for name in dir(self):
+               method = getattr(self, name)
+               if callable(method) and getattr(method, 'isPartialTest', False):
+                    results[name] = method()
+          for key, value in results.items():
+               if value == False:
+                    return False
+          return True
           
-     def test():
-          pass
+     def fullTest(self):
+          results = {}
+          for name in dir(self):
+               method = getattr(self, name)
+               if callable(method) and getattr(method, 'isFullTest', False):
+                    results[name] = method()
+          for key, value in results.items():
+               if value == False:
+                    return False
+          return True
       
- 
- 
      def findAssignment():
          pass
     

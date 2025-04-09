@@ -2,7 +2,7 @@ import employee as e
 
 class Constraints:
     def __init__(self, taskMins: list[int]):
-        self._taskMins = taskMins
+        self._taskMins = [float('inf')] + taskMins
 
     @property
     def taskMins(self):
