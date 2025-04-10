@@ -2,9 +2,9 @@ class Employee:
     def __init__(self, id: str, name: str, taskStatuses: list[bool]):
         self._id = id
         self._name = name
-        self._taskStatuses = taskStatuses
         self._numApprovedTasks = 0
         self._indexApprovedTasks = [0]
+        self.taskStatuses = taskStatuses
 
     @property
     def id(self):
@@ -15,7 +15,7 @@ class Employee:
         return self._indexApprovedTasks
     
     @property
-    def numApprovedtasks(self):
+    def numApprovedTasks(self):
         return self._numApprovedTasks
     
     @id.setter
@@ -42,13 +42,15 @@ class Employee:
             if value[i] == True:
                 statuses[i] = True
                 self._numApprovedTasks += 1
-                self._indexApprovedTasks.append(i)
+                self._indexApprovedTasks.append(i+1)
         self._taskStatuses = statuses
 
     def __repr__(self):
-        return f''''id': {self.id} , 
-                 'name': {self.name}, 
-                 'taskStatuses': {self._taskStatuses}'''
+        return f"""
+                id: {self.id}, 
+                 name: {self.name}, 
+                 taskStatuses: {self._taskStatuses}
+                """
     
     def __eq__(self, otherEmployee):
         flag = True
@@ -61,4 +63,4 @@ class Employee:
         return flag
     
     def __hash__(self):
-        return hash((self.name, self.id, self.tasks))
+        return hash((self.name, self.id, tuple(self.taskStatuses)))

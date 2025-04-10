@@ -76,7 +76,7 @@ class Schedule:
      def testLengthPartial(self):
           flag = True
           for i, value in enumerate((self.taskAssignments.values())):
-               if self.constraints.taskMins[i] >= len(value):
+               if self.constraints.taskMins[i] < len(value):
                     flag = False
                     return flag
           return flag
@@ -117,22 +117,22 @@ class Schedule:
          if employees:
               for employee in employees:
                     updateEmployees = employees[1:]
-                    if employee.numApprovedtasks > 0:
-                         for i in employee.indexApprovedTasks:
+                    if employee.numApprovedTasks > 0:
+                         for i in employee.indexApprovedTasks[1:]:
                               key = list(self.taskAssignments.keys())[i]
                               self.taskAssignments[key].append(employee)
                               if self.partialTest():
                                    if self.fullTest():
                                         validSchedules.append(copy.deepcopy(self))
                                    self.findAssignment(updateEmployees, validSchedules)
-                              self.taskAssignments = self.taskAssignments[key].pop()
+                              self.taskAssignments[key].pop()
                               if key == list(self.taskAssignments.keys())[-1]:
                                    flag = False
                          if not flag:
                               break
                     else:
                          key = list(self.taskAssignments.keys())[0]
-                         self.taskAssignments[key].append(employee)
+                         self._taskAssignments[key].append(employee)
                          if self.fullTest():
                               validSchedules.append(copy.deepcopy(self))
                          self.findAssignment(updateEmployees, validSchedules)
