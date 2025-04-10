@@ -6,7 +6,7 @@ import copy
 class Schedule:
      def __init__(self, employeesToAssign: list[e.Employee], constraints: c.Constraints):
          self._employeesToAssign = employeesToAssign
-         self._taskAssignments = self.taskAssignments(self.employeesToAssign[0].taskStatuses)
+         self._taskAssignments = self.taskAssignmentSetter(employeesToAssign[0].taskStatuses)
          self._constraints = constraints
  
      @property
@@ -43,10 +43,11 @@ class Schedule:
          return self._taskAssignments
      
      #@taskAssignments.setter
-     def taskAssignments(self, taskStatuses):
+     @staticmethod
+     def taskAssignmentSetter(taskStatuses):
          amountOfApprovals = len(taskStatuses) + 1
          taskAssignments = {f'task{i}' : [] for i in range(amountOfApprovals)}
-         self._taskAssignments = taskAssignments
+         return taskAssignments
  
      @property
      def employeesToAssign(self):
@@ -74,7 +75,7 @@ class Schedule:
      @partialTestDecorator
      def testLengthPartial(self):
           flag = True
-          for i, value in enumerate(self.taskAssignments.values()):
+          for i, value in enumerate((self.taskAssignments.values())):
                if self.constraints.taskMins[i] >= len(value):
                     flag = False
                     return flag
@@ -83,7 +84,7 @@ class Schedule:
      @fullTestDecorator
      def testLengthFull(self):
           flag = True
-          for i, value in enumerate(self.taskAssignments.values()[1:]):
+          for i, value in enumerate(list(self.taskAssignments.values())[1:]):
                if self.constraints.taskMins[i] != len(value):
                     flag = False
                     return flag
