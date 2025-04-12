@@ -85,7 +85,7 @@ class Schedule:
      def testLengthFull(self):
           flag = True
           for i, value in enumerate(list(self.taskAssignments.values())[1:]):
-               if self.constraints.taskMins[i] != len(value):
+               if self.constraints.taskMins[i+1] != len(value):
                     flag = False
                     return flag
           return flag
@@ -113,6 +113,38 @@ class Schedule:
           return True
       
      def findAssignment(self, employees: list[e.Employee], validSchedules: list):
+         print(f"Recursing with {len(employees)} employees left.")
+
+         if self.fullTest():
+               validSchedules.append(copy.deepcopy(self))
+               return
+         flag = True
+         for employee in employees:
+               updateEmployees = employees.copy()
+               updateEmployees.remove(employee)
+               if employee.numApprovedTasks > 0:
+                    for i in employee.indexApprovedTasks[1:]:
+                         key = list(self.taskAssignments.keys())[i]
+                         self.taskAssignments[key].append(employee)
+                         if self.partialTest():
+                              self.findAssignment(updateEmployees, validSchedules)
+                         self.taskAssignments[key].pop()
+
+                         if key == list(self.taskAssignments.keys())[-1]:
+                              flag = False
+
+               if not flag:
+                    break
+                         
+               else:
+                    key = list(self.taskAssignments.keys())[0]
+                    self.taskAssignments[key].append(employee)
+                    #self.findAssignment(updateEmployees, validSchedules)
+         
+
+     def findAssignmentArchive(self, employees: list[e.Employee], validSchedules: list):
+         if len(validSchedules) == 50:
+              return
          flag = True
          if employees:
               for employee in employees:
@@ -128,14 +160,48 @@ class Schedule:
                               self.taskAssignments[key].pop()
                               if key == list(self.taskAssignments.keys())[-1]:
                                    flag = False
-                         if not flag:
-                              break
+                    if not flag:
+                         break
                     else:
                          key = list(self.taskAssignments.keys())[0]
                          self._taskAssignments[key].append(employee)
                          if self.fullTest():
                               validSchedules.append(copy.deepcopy(self))
                          self.findAssignment(updateEmployees, validSchedules)
-                         
+         else:
+              if self.fullTest():
+                    validSchedules.append(copy.deepcopy(self))   
 
-    
+     def findAssignment2(self, employees: list[e.Employee], validSchedules: list):
+      if not employees:
+          if self.fullTest():
+              validSchedules.append(copy.deepcopy(self))
+          return
+  
+      for idx, employee in enumerate(employees):
+          updateEmployees = employees[:idx] + employees[idx+1:]
+  
+          if employee.numApprovedTasks > 0:
+              for i in employee.indexApprovedTasks[1:]:  # Skipping the 0th as per your logic
+                  key = list(self.taskAssignments.keys())[i]
+                  self.taskAssignments[key].append(employee)
+  
+                  if self.partialTest():
+                      if self.fullTest():
+                          validSchedules.append(copy.deepcopy(self))
+                      self.findAssignment(updateEmployees, validSchedules)
+  
+                  self.taskAssignments[key].pop()
+  
+                  if key == list(self.taskAssignments.keys())[-1]:
+                      return  # Stop exploring if the last task was tested unsuccessfully
+          else:
+              # Assign to the default bucket (i.e., not approved for any task)
+              key = list(self.taskAssignments.keys())[0]
+              self.taskAssignments[key].append(employee)
+  
+              if self.fullTest():
+                  validSchedules.append(copy.deepcopy(self))
+  
+              self.findAssignment(updateEmployees, validSchedules)
+              self.taskAssignments[key].pop()
