@@ -5,13 +5,17 @@ import copy
 
 class Schedule:
      def __init__(self, employeesToAssign: list[e.Employee], constraints: c.Constraints):
-         self._employeesToAssign = employeesToAssign
-         self._taskAssignments = self.taskAssignmentSetter(employeesToAssign[0].taskStatuses)
-         self._constraints = constraints
+         self.employeesToAssign = employeesToAssign
+         self.taskAssignments = employeesToAssign[0].taskStatuses
+         self.constraints = constraints
  
      @property
      def constraints(self):
           return self._constraints
+     
+     @constraints.setter
+     def constraints(self, constraints):
+          self._constraints = constraints
  
      def __repr__(self):
           return self.taskAssignments
@@ -42,12 +46,11 @@ class Schedule:
      def taskAssignments(self):
          return self._taskAssignments
      
-     #@taskAssignments.setter
-     @staticmethod
-     def taskAssignmentSetter(taskStatuses):
+     @taskAssignments.setter
+     def taskAssignments(self, taskStatuses):
          amountOfApprovals = len(taskStatuses) + 1
          taskAssignments = {f'task{i}' : [] for i in range(amountOfApprovals)}
-         return taskAssignments
+         self._taskAssignments = taskAssignments
  
      @property
      def employeesToAssign(self):
@@ -55,7 +58,8 @@ class Schedule:
         
      @employeesToAssign.setter
      def employeesToAssign(self, employees):
-         employeeList = [[] * (len(employees[0].taskStatuses) + 1)]
+         tasks = employees[0].taskStatuses
+         employeeList = [[] for l in range(len(tasks))]
          for employee in employees:
                  numApprovals = employee.numApprovedTasks
                  employeeList[numApprovals].append(employee)
@@ -131,6 +135,7 @@ class Schedule:
                if employee.numApprovedTasks == 0:
                     key = list(self.taskAssignments.keys())[0]
                     self.taskAssignments[key].append(employee)
+                    self.taskAssignments[key] = list(dict.fromkeys(self.taskAssignments[key]))
                     if self.fullTest():
                          validSchedules.append(copy.deepcopy(self))
                     continue
@@ -150,66 +155,5 @@ class Schedule:
                          
          
 
-     def findAssignmentArchive(self, employees: list[e.Employee], validSchedules: list):
-         if len(validSchedules) == 50:
-              return
-         flag = True
-         if employees:
-              for employee in employees:
-                    updateEmployees = employees[1:]
-                    if employee.numApprovedTasks > 0:
-                         for i in employee.indexApprovedTasks[1:]:
-                              key = list(self.taskAssignments.keys())[i]
-                              self.taskAssignments[key].append(employee)
-                              if self.partialTest():
-                                   if self.fullTest():
-                                        validSchedules.append(copy.deepcopy(self))
-                                   self.findAssignment(updateEmployees, validSchedules)
-                              self.taskAssignments[key].pop()
-                              if key == list(self.taskAssignments.keys())[-1]:
-                                   flag = False
-                    if not flag:
-                         break
-                    else:
-                         key = list(self.taskAssignments.keys())[0]
-                         self._taskAssignments[key].append(employee)
-                         if self.fullTest():
-                              validSchedules.append(copy.deepcopy(self))
-                         self.findAssignment(updateEmployees, validSchedules)
-         else:
-              if self.fullTest():
-                    validSchedules.append(copy.deepcopy(self))   
 
-     def findAssignment2(self, employees: list[e.Employee], validSchedules: list):
-      if not employees:
-          if self.fullTest():
-              validSchedules.append(copy.deepcopy(self))
-          return
-  
-      for idx, employee in enumerate(employees):
-          updateEmployees = employees[:idx] + employees[idx+1:]
-  
-          if employee.numApprovedTasks > 0:
-              for i in employee.indexApprovedTasks[1:]:  # Skipping the 0th as per your logic
-                  key = list(self.taskAssignments.keys())[i]
-                  self.taskAssignments[key].append(employee)
-  
-                  if self.partialTest():
-                      if self.fullTest():
-                          validSchedules.append(copy.deepcopy(self))
-                      self.findAssignment(updateEmployees, validSchedules)
-  
-                  self.taskAssignments[key].pop()
-  
-                  if key == list(self.taskAssignments.keys())[-1]:
-                      return  # Stop exploring if the last task was tested unsuccessfully
-          else:
-              # Assign to the default bucket (i.e., not approved for any task)
-              key = list(self.taskAssignments.keys())[0]
-              self.taskAssignments[key].append(employee)
-  
-              if self.fullTest():
-                  validSchedules.append(copy.deepcopy(self))
-  
-              self.findAssignment(updateEmployees, validSchedules)
-              self.taskAssignments[key].pop()
+     
