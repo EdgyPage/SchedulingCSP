@@ -8,7 +8,12 @@ class Schedule:
          self.employeesToAssign = employeesToAssign
          self.taskAssignments = employeesToAssign[0].taskStatuses
          self.constraints = constraints
- 
+         self._validSchedules = []
+     
+     @property
+     def validSchedules(self):
+          return self._validSchedules
+
      @property
      def constraints(self):
           return self._constraints
@@ -18,7 +23,7 @@ class Schedule:
           self._constraints = constraints
  
      def __repr__(self):
-          return self.taskAssignments
+          return str(self.taskAssignments)
      
      @property
      def getAttributes(self):
@@ -68,6 +73,16 @@ class Schedule:
          employeeList = [employee for innerList in employeeList for employee in innerList]
          self._employeesToAssign = employeeList
      
+     def assignUnqualifiedEmployees(self):
+          unqualified = []
+          for employee in self.employeesToAssign:
+               if employee.numApprovedTasks == 0:
+                    key = list(self.taskAssignments.keys())[0]
+                    self.taskAssignments[key].append(employee)
+                    unqualified.append(employee)
+          for employee in unqualified:
+               self.employeesToAssign.remove(employee)
+
      def partialTestDecorator(func):
           func.isPartialTest = True
           return func
@@ -79,8 +94,10 @@ class Schedule:
      @partialTestDecorator
      def testLengthPartial(self):
           flag = True
-          for i, value in enumerate((self.taskAssignments.values())):
-               if self.constraints.taskMins[i] < len(value):
+          for i, (key, value) in enumerate((self.taskAssignments.items())):
+               if key == 'Unassigned':
+                    continue
+               elif self.constraints.taskMins[i] < len(value):
                     flag = False
                     return flag
           return flag
@@ -88,7 +105,9 @@ class Schedule:
      @fullTestDecorator
      def testLengthFull(self):
           flag = True
-          for i, value in enumerate(list(self.taskAssignments.values())[1:]):
+          for i, (key, value) in enumerate(list(self.taskAssignments.items())[1:]):
+               if key == 'Unassigned':
+                    continue
                if self.constraints.taskMins[i+1] != len(value):
                     flag = False
                     return flag
@@ -116,13 +135,14 @@ class Schedule:
                     return False
           return True
       
-     def findAssignment(self, employees: list[e.Employee], validSchedules: list):
+     def findAssignment(self, employees: list[e.Employee], maxLength: int):
          print(f"Recursing with {len(employees)} employees left.")
-         if len(validSchedules) == 10:
+         if len(self.validSchedules) == maxLength:
               return
          
          if self.fullTest():
-               validSchedules.append(copy.deepcopy(self))
+               self.taskAssignments['Unassigned'] = employees
+               self.validSchedules.append(copy.deepcopy(self))
                return
          flag = True
 
@@ -137,14 +157,14 @@ class Schedule:
                     self.taskAssignments[key].append(employee)
                     self.taskAssignments[key] = list(dict.fromkeys(self.taskAssignments[key]))
                     if self.fullTest():
-                         validSchedules.append(copy.deepcopy(self))
+                         self.validSchedules.append(copy.deepcopy(self))
                     continue
 
                for j in employee.indexApprovedTasks[1:]:
                          key = list(self.taskAssignments.keys())[j]
                          self.taskAssignments[key].append(employee)
                          if self.partialTest():
-                              self.findAssignment(updateEmployees, validSchedules)
+                              self.findAssignment(updateEmployees, self.validSchedules)
                          self.taskAssignments[key].pop()
 
                          if key == list(self.taskAssignments.keys())[-1]:

@@ -2,7 +2,7 @@ import employee as e
 
 class Constraints:
     def __init__(self, taskMins: list[int]):
-        self._taskMins = [float('inf')] + taskMins
+        self.taskMins = taskMins
 
     @property
     def taskMins(self):
@@ -10,7 +10,4 @@ class Constraints:
 
     @taskMins.setter
     def taskMins(self, mins: list[int]):
-        if len(self.taskStatuses) == len(mins):
-            self._taskMins = mins
-        else:
-            raise ValueError('List of task minimums does not equal length of assignable tasks.')
+        self._taskMins = [float('inf')] + mins
