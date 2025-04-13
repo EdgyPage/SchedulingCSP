@@ -114,17 +114,29 @@ class Schedule:
       
      def findAssignment(self, employees: list[e.Employee], validSchedules: list):
          print(f"Recursing with {len(employees)} employees left.")
-         if len(validSchedules) == 50:
+         if len(validSchedules) == 10:
               return
+         
          if self.fullTest():
                validSchedules.append(copy.deepcopy(self))
                return
          flag = True
-         for employee in employees:
-               updateEmployees = employees.copy()
-               updateEmployees.remove(employee)
-               for i in employee.indexApprovedTasks:
-                         key = list(self.taskAssignments.keys())[i]
+
+         for i in range(len(employees)):
+               employee = employees[i]
+               if i == len(employees)-1:
+                    updateEmployees = []
+               else:
+                    updateEmployees = employees[i+1:]
+               if employee.numApprovedTasks == 0:
+                    key = list(self.taskAssignments.keys())[0]
+                    self.taskAssignments[key].append(employee)
+                    if self.fullTest():
+                         validSchedules.append(copy.deepcopy(self))
+                    continue
+
+               for j in employee.indexApprovedTasks[1:]:
+                         key = list(self.taskAssignments.keys())[j]
                          self.taskAssignments[key].append(employee)
                          if self.partialTest():
                               self.findAssignment(updateEmployees, validSchedules)
