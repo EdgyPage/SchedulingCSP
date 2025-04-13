@@ -4,11 +4,24 @@ import random as r
 import copy
 
 class Schedule:
-     def __init__(self, employeesToAssign: list[e.Employee], constraints: c.Constraints):
-         self.employeesToAssign = employeesToAssign
+     def __init__(self, employeesToAssign: list[e.Employee], constraints: c.Constraints, maxLength : int):
          self.taskAssignments = employeesToAssign[0].taskStatuses
+         self.employeesToAssign = employeesToAssign
          self.constraints = constraints
          self._validSchedules = []
+         self.maxLength = maxLength
+         self._initialEmployees = self.employeesToAssign
+
+     @property
+     def maxLength(self):
+          return self._maxLength
+     
+     @maxLength.setter
+     def maxLength(self, value):
+          if value >= 1:
+               self._maxLength = value
+          else:
+               raise ValueError('Max Length is not valid input!')
      
      @property
      def validSchedules(self):
@@ -67,7 +80,11 @@ class Schedule:
          employeeList = [[] for l in range(len(tasks))]
          for employee in employees:
                  numApprovals = employee.numApprovedTasks
-                 employeeList[numApprovals].append(employee)
+                 if numApprovals == 0:
+                      key = list(self.taskAssignments.keys())[0]
+                      self.taskAssignments[key].append(employee)
+                 else:
+                      employeeList[numApprovals].append(employee)
          for innerList in employeeList:
               r.shuffle(innerList)
          employeeList = [employee for innerList in employeeList for employee in innerList]
@@ -82,6 +99,14 @@ class Schedule:
                     unqualified.append(employee)
           for employee in unqualified:
                self.employeesToAssign.remove(employee)
+
+     def findUnassignedEmployees(self):
+          assigned = set()
+          for key, value in self.taskAssignments.items():
+               if key != 'Unassigned':
+                    assigned.update(value)
+          unassigned = list(set(self._initialEmployees) - assigned)
+          return unassigned
 
      def partialTestDecorator(func):
           func.isPartialTest = True
@@ -135,13 +160,13 @@ class Schedule:
                     return False
           return True
       
-     def findAssignment(self, employees: list[e.Employee], maxLength: int):
+     def findAssignment(self, employees: list[e.Employee]):
          print(f"Recursing with {len(employees)} employees left.")
-         if len(self.validSchedules) == maxLength:
+         if len(self.validSchedules) == self.maxLength:
               return
          
          if self.fullTest():
-               self.taskAssignments['Unassigned'] = employees
+               self.taskAssignments['Unassigned'] = self.findUnassignedEmployees()
                self.validSchedules.append(copy.deepcopy(self))
                return
          flag = True
@@ -157,6 +182,7 @@ class Schedule:
                     self.taskAssignments[key].append(employee)
                     self.taskAssignments[key] = list(dict.fromkeys(self.taskAssignments[key]))
                     if self.fullTest():
+                         self.taskAssignments['Unassigned'] = self.findUnassignedEmployees()
                          self.validSchedules.append(copy.deepcopy(self))
                     continue
 
@@ -164,7 +190,7 @@ class Schedule:
                          key = list(self.taskAssignments.keys())[j]
                          self.taskAssignments[key].append(employee)
                          if self.partialTest():
-                              self.findAssignment(updateEmployees, self.validSchedules)
+                              self.findAssignment(updateEmployees)
                          self.taskAssignments[key].pop()
 
                          if key == list(self.taskAssignments.keys())[-1]:
