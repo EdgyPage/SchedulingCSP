@@ -52,6 +52,9 @@ class Employee:
                  taskStatuses: {self._taskStatuses}
                 """
     
+    def __lt__(self, otherEmployee):
+        return self.id < otherEmployee.id
+
     def __eq__(self, otherEmployee):
         flag = True
         if not isinstance(otherEmployee, Employee):
