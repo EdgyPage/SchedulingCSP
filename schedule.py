@@ -161,13 +161,13 @@ class Schedule:
           return True
       
      def findAssignment(self, employees: list[e.Employee]):
-         print(f"Recursing with {len(employees)} employees left.")
+         #print(f"Recursing with {len(employees)} employees left.")
          if len(self.validSchedules) == self.maxLength:
               return
          
          if self.fullTest():
                self.taskAssignments['Unassigned'] = self.findUnassignedEmployees()
-               self.validSchedules.append(copy.deepcopy(self))
+               self.validSchedules.append(copy.deepcopy(self.taskAssignments))
                return
          flag = True
 
@@ -183,7 +183,7 @@ class Schedule:
                     self.taskAssignments[key] = list(dict.fromkeys(self.taskAssignments[key]))
                     if self.fullTest():
                          self.taskAssignments['Unassigned'] = self.findUnassignedEmployees()
-                         self.validSchedules.append(copy.deepcopy(self))
+                         self.validSchedules.append(copy.deepcopy(self.taskAssignments))
                     continue
 
                for j in employee.indexApprovedTasks[1:]:
