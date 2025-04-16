@@ -159,15 +159,19 @@ class Schedule:
                if value == False:
                     return False
           return True
-      
-     def findAssignment(self, employees: list[e.Employee]):
+     
+     def createCompleteAssignment(self):
+          self.taskAssignments['Unassigned'] = self.findUnassignedEmployees()
+          self.validSchedules.append(copy.deepcopy(self.taskAssignments))
+
+     def findAssignments(self, employees: list[e.Employee]):
          #print(f"Recursing with {len(employees)} employees left.")
          if len(self.validSchedules) == self.maxLength:
               return
          
          if self.fullTest():
-               self.taskAssignments['Unassigned'] = self.findUnassignedEmployees()
-               self.validSchedules.append(copy.deepcopy(self.taskAssignments))
+               self.createCompleteAssignment()
+               self.ensureUniqueAssignments()
                return
          flag = True
 
@@ -182,15 +186,15 @@ class Schedule:
                     self.taskAssignments[key].append(employee)
                     self.taskAssignments[key] = list(dict.fromkeys(self.taskAssignments[key]))
                     if self.fullTest():
-                         self.taskAssignments['Unassigned'] = self.findUnassignedEmployees()
-                         self.validSchedules.append(copy.deepcopy(self.taskAssignments))
+                         self.createCompleteAssignment()
+                         self.ensureUniqueAssignments()
                     continue
 
                for j in employee.indexApprovedTasks[1:]:
                          key = list(self.taskAssignments.keys())[j]
                          self.taskAssignments[key].append(employee)
                          if self.partialTest():
-                              self.findAssignment(updateEmployees)
+                              self.findAssignments(updateEmployees)
                          self.taskAssignments[key].pop()
 
                          if key == list(self.taskAssignments.keys())[-1]:
@@ -198,7 +202,23 @@ class Schedule:
 
                if not flag:
                     break
-                         
+
+     def ensureUniqueAssignments(self):
+          list_of_dicts = self.validSchedules
+          # Convert to a normalized hashable form
+          def dict_to_tuple_unordered_lists(d):
+              return tuple(sorted((k, tuple(sorted(v))) for k, v in d.items()))
+          # Make a set of the hashable representations
+          set_of_dicts = set(dict_to_tuple_unordered_lists(d) for d in list_of_dicts)
+
+          # Optionally, convert back to dicts (if needed)
+          unique_dicts = [dict((k, list(v)) for k, v in t) for t in set_of_dicts]
+     
+          self._validSchedules = unique_dicts
+
+     def populateAssignments(self):
+          self.assignUnqualifiedEmployees()
+          self.findAssignments(self.employeesToAssign)
          
 
 
