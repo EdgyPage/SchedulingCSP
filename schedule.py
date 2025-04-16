@@ -2,6 +2,9 @@ import employee as e
 import constraints as c
 import random as r
 import copy
+import pandas as pd
+from datetime import datetime
+
 
 class Schedule:
      def __init__(self, employeesToAssign: list[e.Employee], constraints: c.Constraints, maxLength : int):
@@ -203,7 +206,7 @@ class Schedule:
 
 
      def findAssignments(self, employees: list[e.Employee]):
-         #print(f"Recursing with {len(employees)} employees left.")
+         print(f"Recursing with {len(employees)} employees left.")
          if len(self.validSchedules) == self.maxLength:
               return
          
@@ -260,6 +263,20 @@ class Schedule:
      def populateAssignments(self):
           self.assignUnqualifiedEmployees()
           self.findAssignments(self.employeesToAssign)
+
+     def writeAssignmentsToExcel(self, filePath: str = ''):
+          for i, assignment in enumerate(self.validSchedules):
+               rows = []
+               timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+               for task, employees in assignment.items():
+                    for employee in employees:
+                         rows.append({
+                              "Name": employee.name,
+                              "ID": employee.id,
+                              "Function": task
+                         })
+               df = pd.DataFrame(rows)
+               df.to_excel(f'{filePath}_Schedule_{i+1}_{timestamp}.xlsx', index=False)
          
 
 
