@@ -11,6 +11,7 @@ class Schedule:
          self._validSchedules = []
          self.maxLength = maxLength
          self._initialEmployees = self.employeesToAssign
+         self.maxPossibleAssignment = employeesToAssign
 
      @property
      def maxLength(self):
@@ -127,6 +128,19 @@ class Schedule:
                     return flag
           return flag
      
+     @partialTestDecorator
+     def testTaskMins(self):
+          flag = True
+          for i, (key, value) in enumerate(self.taskAssignments.items()):
+               if key == 'Unassigned':
+                    continue
+               taskMin = self.constraints.taskMins[i]
+               talentPool = (len(value) + self.maxPossibleAssignment[key])
+               if talentPool < taskMin and taskMin != float('inf'):
+                    flag = False
+                    return flag
+          return flag   
+
      @fullTestDecorator
      def testLengthFull(self):
           flag = True
@@ -137,6 +151,15 @@ class Schedule:
                     flag = False
                     return flag
           return flag
+
+     def adjustMaxPossible(self, employee: e.Employee, increment: bool):
+          keys = list(self.taskAssignments.keys())
+          if increment:
+               change = 1
+          else:
+               change = -1
+          for index in employee.indexApprovedTasks:
+               self.maxPossibleAssignment[keys[index]] += change
 
      def partialTest(self):
           results = {}
@@ -164,6 +187,21 @@ class Schedule:
           self.taskAssignments['Unassigned'] = self.findUnassignedEmployees()
           self.validSchedules.append(copy.deepcopy(self.taskAssignments))
 
+     @property
+     def maxPossibleAssignment(self):
+          return self._maxPossibleAssignment
+
+     @maxPossibleAssignment.setter
+     def maxPossibleAssignment(self, employees):
+          keys = list(self.taskAssignments.keys())
+          maxAssignments = {key: 0 for key in keys}
+          for employee in employees:
+               for index in employee.indexApprovedTasks:
+                    key = list(self.taskAssignments.keys())[index]
+                    maxAssignments[key] += 1
+          self._maxPossibleAssignment = maxAssignments
+
+
      def findAssignments(self, employees: list[e.Employee]):
          #print(f"Recursing with {len(employees)} employees left.")
          if len(self.validSchedules) == self.maxLength:
@@ -181,6 +219,7 @@ class Schedule:
                     updateEmployees = []
                else:
                     updateEmployees = employees[i+1:]
+
                if employee.numApprovedTasks == 0:
                     key = list(self.taskAssignments.keys())[0]
                     self.taskAssignments[key].append(employee)
@@ -193,9 +232,11 @@ class Schedule:
                for j in employee.indexApprovedTasks[1:]:
                          key = list(self.taskAssignments.keys())[j]
                          self.taskAssignments[key].append(employee)
+                         self.adjustMaxPossible(employee, False)
                          if self.partialTest():
                               self.findAssignments(updateEmployees)
                          self.taskAssignments[key].pop()
+                         self.adjustMaxPossible(employee, True)
 
                          if key == list(self.taskAssignments.keys())[-1]:
                               flag = False
