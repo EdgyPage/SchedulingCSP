@@ -8,6 +8,7 @@ from datetime import datetime
 
 class Schedule:
      def __init__(self, employeesToAssign: list[e.Employee], constraints: c.Constraints, maxLength : int):
+         self.tasks = employeesToAssign[0].tasks
          self.taskAssignments = employeesToAssign[0].taskStatuses
          self.employeesToAssign = employeesToAssign
          self.constraints = constraints
@@ -26,6 +27,14 @@ class Schedule:
                self._maxLength = value
           else:
                raise ValueError('Max Length is not valid input!')
+     
+     @property
+     def tasks(self):
+          return self._tasks 
+     
+     @tasks.setter
+     def tasks(self, tasks):
+          self._tasks = tasks
      
      @property
      def validSchedules(self):
@@ -70,8 +79,7 @@ class Schedule:
      
      @taskAssignments.setter
      def taskAssignments(self, taskStatuses):
-         amountOfApprovals = len(taskStatuses) + 1
-         taskAssignments = {f'task{i}' : [] for i in range(amountOfApprovals)}
+         taskAssignments = {'Unassigned': []} | {task : [] for task in self.tasks}
          self._taskAssignments = taskAssignments
  
      @property
@@ -200,6 +208,8 @@ class Schedule:
           maxAssignments = {key: 0 for key in keys}
           for employee in employees:
                for index in employee.indexApprovedTasks:
+                    if index >= len(self.taskAssignments.keys()):
+                         print('hi')
                     key = list(self.taskAssignments.keys())[index]
                     maxAssignments[key] += 1
           self._maxPossibleAssignment = maxAssignments

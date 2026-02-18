@@ -1,9 +1,10 @@
 class Employee:
-    def __init__(self, id: str, name: str, taskStatuses: list[bool]):
+    def __init__(self, id: str, name: str, tasks:list[str], taskStatuses: list[bool]):
         self._id = id
         self._name = name
         self._numApprovedTasks = 0
         self._indexApprovedTasks = [0]
+        self.tasks = tasks
         self.taskStatuses = taskStatuses
 
     @property
@@ -38,12 +39,22 @@ class Employee:
     def taskStatuses(self, value: list[bool]):
         n = len(value)
         statuses = [False] * n
+        if len(statuses) != len(self.tasks):
+            raise ValueError("Amount of functions does not match amount of approvals!")
         for i in range(n):
             if value[i] == True:
                 statuses[i] = True
                 self._numApprovedTasks += 1
                 self._indexApprovedTasks.append(i+1)
         self._taskStatuses = statuses
+
+    @property
+    def tasks(self):
+        return self._tasks
+    
+    @tasks.setter
+    def tasks(self, value: list[str]):
+        self._tasks = value
 
     def __repr__(self):
         return f"""
