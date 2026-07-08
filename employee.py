@@ -38,14 +38,17 @@ class Employee:
     @taskStatuses.setter
     def taskStatuses(self, value: list[bool]):
         n = len(value)
-        statuses = [False] * n
-        if len(statuses) != len(self.tasks):
+        if n != len(self.tasks):
             raise ValueError("Amount of functions does not match amount of approvals!")
+        # Reset derived state so the setter is idempotent (safe to re-assign).
+        statuses = [False] * n
+        self._numApprovedTasks = 0
+        self._indexApprovedTasks = [0]
         for i in range(n):
-            if value[i] == True:
+            if value[i]:
                 statuses[i] = True
                 self._numApprovedTasks += 1
-                self._indexApprovedTasks.append(i+1)
+                self._indexApprovedTasks.append(i + 1)
         self._taskStatuses = statuses
 
     @property

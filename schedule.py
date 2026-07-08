@@ -1,293 +1,257 @@
+"""Backtracking CSP solver that assigns employees to tasks.
+
+This module is pure and importable: it performs no disk writes and no stdout
+printing. Build a :class:`Schedule`, call :meth:`populateAssignments`, then read
+:attr:`validSchedules` -- a list of ``{task_name: [Employee, ...]}`` dicts, one per
+valid schedule found.
+
+The search is bounded: it stops as soon as ``maxLength`` schedules are found, and
+(optionally) when a wall-clock ``time_budget_s`` or ``max_nodes`` limit is reached,
+returning whatever it found so far. That guarantees a response regardless of input
+size, which matters when this runs behind a web request.
+"""
+
+import random
+import time
+
 import employee as e
 import constraints as c
-import random as r
-import copy
-import pandas as pd
-from datetime import datetime
 
 
 class Schedule:
-     def __init__(self, employeesToAssign: list[e.Employee], constraints: c.Constraints, maxLength : int):
-         self.tasks = employeesToAssign[0].tasks
-         self.taskAssignments = employeesToAssign[0].taskStatuses
-         self.employeesToAssign = employeesToAssign
-         self.constraints = constraints
-         self._validSchedules = []
-         self.maxLength = maxLength
-         self._initialEmployees = self.employeesToAssign
-         self.maxPossibleAssignment = employeesToAssign
+    def __init__(self, employeesToAssign: list[e.Employee], constraints: c.Constraints,
+                 maxLength: int, *, seed=None, time_budget_s: float | None = None,
+                 max_nodes: int | None = None):
+        self._rng = random.Random(seed)
+        self.tasks = employeesToAssign[0].tasks
+        self.taskAssignments = None            # setter ignores the value; builds empty buckets
+        self._task_keys = list(self._taskAssignments.keys())
+        self.constraints = constraints
+        self._validSchedules = []
+        self._schedule_signatures = set()
+        self.maxLength = maxLength
+        # _initialEmployees must hold ALL employees (including anyone approved for zero
+        # tasks) so findUnassignedEmployees can sweep them into 'Unassigned' at the end.
+        self._initialEmployees = list(employeesToAssign)
+        self.employeesToAssign = employeesToAssign   # bucketed working list (qualified only)
+        self.maxPossibleAssignment = employeesToAssign
+        # runtime budget
+        self._time_budget_s = time_budget_s
+        self._max_nodes = max_nodes
+        self._deadline = None
+        self._nodes = 0
+        self._cache_tests()
 
-     @property
-     def maxLength(self):
-          return self._maxLength
-     
-     @maxLength.setter
-     def maxLength(self, value):
-          if value >= 1:
-               self._maxLength = value
-          else:
-               raise ValueError('Max Length is not valid input!')
-     
-     @property
-     def tasks(self):
-          return self._tasks 
-     
-     @tasks.setter
-     def tasks(self, tasks):
-          self._tasks = tasks
-     
-     @property
-     def validSchedules(self):
-          return self._validSchedules
+    @property
+    def maxLength(self):
+        return self._maxLength
 
-     @property
-     def constraints(self):
-          return self._constraints
-     
-     @constraints.setter
-     def constraints(self, constraints):
-          self._constraints = constraints
- 
-     def __repr__(self):
-          return str(self.taskAssignments)
-     
-     @property
-     def getAttributes(self):
-          return vars(self)
- 
-     def __eq__(self, other):
-          flag = True
-          if not isinstance(other, Schedule):
-               flag = False
-               return flag
-          selfAttributes = self.getAttributes()
-          otherAttributes = other.getAttributes()
-          flag = selfAttributes == otherAttributes
-          return flag
-     
-     def __hash__(self):
-          hashable = tuple()
-          for key, values in self.taskAssignments.items():
-               hashable = hashable + (key, )
-               for value in values:
-                    hashable = hashable + (value,)
-          return hash(hashable)
- 
-     @property
-     def taskAssignments(self):
-         return self._taskAssignments
-     
-     @taskAssignments.setter
-     def taskAssignments(self, taskStatuses):
-         taskAssignments = {'Unassigned': []} | {task : [] for task in self.tasks}
-         self._taskAssignments = taskAssignments
- 
-     @property
-     def employeesToAssign(self):
-          return self._employeesToAssign
-        
-     @employeesToAssign.setter
-     def employeesToAssign(self, employees):
-         tasks = employees[0].taskStatuses
-         employeeList = [[] for l in range(len(tasks))]
-         for employee in employees:
-                 numApprovals = employee.numApprovedTasks
-                 if numApprovals == 0:
-                      key = list(self.taskAssignments.keys())[0]
-                      self.taskAssignments[key].append(employee)
-                 else:
-                      employeeList[numApprovals].append(employee)
-         for innerList in employeeList:
-              r.shuffle(innerList)
-         employeeList = [employee for innerList in employeeList for employee in innerList]
-         self._employeesToAssign = employeeList
-     
-     def assignUnqualifiedEmployees(self):
-          unqualified = []
-          for employee in self.employeesToAssign:
-               if employee.numApprovedTasks == 0:
-                    key = list(self.taskAssignments.keys())[0]
-                    self.taskAssignments[key].append(employee)
-                    unqualified.append(employee)
-          for employee in unqualified:
-               self.employeesToAssign.remove(employee)
+    @maxLength.setter
+    def maxLength(self, value):
+        if value >= 1:
+            self._maxLength = value
+        else:
+            raise ValueError('Max Length is not valid input!')
 
-     def findUnassignedEmployees(self):
-          assigned = set()
-          for key, value in self.taskAssignments.items():
-               if key != 'Unassigned':
-                    assigned.update(value)
-          unassigned = list(set(self._initialEmployees) - assigned)
-          return unassigned
+    @property
+    def tasks(self):
+        return self._tasks
 
-     def partialTestDecorator(func):
-          func.isPartialTest = True
-          return func
-     
-     def fullTestDecorator(func):
-          func.isFullTest = True
-          return func
+    @tasks.setter
+    def tasks(self, tasks):
+        self._tasks = tasks
 
-     @partialTestDecorator
-     def testLengthPartial(self):
-          flag = True
-          for i, (key, value) in enumerate((self.taskAssignments.items())):
-               if key == 'Unassigned':
-                    continue
-               elif self.constraints.taskMins[i] < len(value):
-                    flag = False
-                    return flag
-          return flag
-     
-     @partialTestDecorator
-     def testTaskMins(self):
-          flag = True
-          for i, (key, value) in enumerate(self.taskAssignments.items()):
-               if key == 'Unassigned':
-                    continue
-               taskMin = self.constraints.taskMins[i]
-               talentPool = (len(value) + self.maxPossibleAssignment[key])
-               if talentPool < taskMin and taskMin != float('inf'):
-                    flag = False
-                    return flag
-          return flag   
+    @property
+    def validSchedules(self):
+        return self._validSchedules
 
-     @fullTestDecorator
-     def testLengthFull(self):
-          flag = True
-          for i, (key, value) in enumerate(list(self.taskAssignments.items())[1:]):
-               if key == 'Unassigned':
-                    continue
-               if self.constraints.taskMins[i+1] != len(value):
-                    flag = False
-                    return flag
-          return flag
+    @property
+    def constraints(self):
+        return self._constraints
 
-     def adjustMaxPossible(self, employee: e.Employee, increment: bool):
-          keys = list(self.taskAssignments.keys())
-          if increment:
-               change = 1
-          else:
-               change = -1
-          for index in employee.indexApprovedTasks:
-               self.maxPossibleAssignment[keys[index]] += change
+    @constraints.setter
+    def constraints(self, constraints):
+        self._constraints = constraints
 
-     def partialTest(self):
-          results = {}
-          for name in dir(self):
-               method = getattr(self, name)
-               if callable(method) and getattr(method, 'isPartialTest', False):
-                    results[name] = method()
-          for key, value in results.items():
-               if value == False:
-                    return False
-          return True
-          
-     def fullTest(self):
-          results = {}
-          for name in dir(self):
-               method = getattr(self, name)
-               if callable(method) and getattr(method, 'isFullTest', False):
-                    results[name] = method()
-          for key, value in results.items():
-               if value == False:
-                    return False
-          return True
-     
-     def createCompleteAssignment(self):
-          self.taskAssignments['Unassigned'] = self.findUnassignedEmployees()
-          self.validSchedules.append(copy.deepcopy(self.taskAssignments))
+    def __repr__(self):
+        return str(self.taskAssignments)
 
-     @property
-     def maxPossibleAssignment(self):
-          return self._maxPossibleAssignment
+    @property
+    def taskAssignments(self):
+        return self._taskAssignments
 
-     @maxPossibleAssignment.setter
-     def maxPossibleAssignment(self, employees):
-          keys = list(self.taskAssignments.keys())
-          maxAssignments = {key: 0 for key in keys}
-          for employee in employees:
-               for index in employee.indexApprovedTasks:
-                    if index >= len(self.taskAssignments.keys()):
-                         print('hi')
-                    key = list(self.taskAssignments.keys())[index]
-                    maxAssignments[key] += 1
-          self._maxPossibleAssignment = maxAssignments
+    @taskAssignments.setter
+    def taskAssignments(self, value):
+        # The argument only signals "(re)initialize"; the buckets are derived from
+        # self.tasks. Index 0 is the catch-all 'Unassigned' bucket.
+        self._taskAssignments = {'Unassigned': []} | {task: [] for task in self.tasks}
 
+    @property
+    def employeesToAssign(self):
+        return self._employeesToAssign
 
-     def findAssignments(self, employees: list[e.Employee]):
-         print(f"Recursing with {len(employees)} employees left.")
-         if len(self.validSchedules) == self.maxLength:
-              return
-         
-         if self.fullTest():
-               self.createCompleteAssignment()
-               self.ensureUniqueAssignments()
-               return
-         flag = True
+    @employeesToAssign.setter
+    def employeesToAssign(self, employees):
+        num_tasks = len(employees[0].taskStatuses)
+        # Bucket by number of approved tasks. Size is num_tasks + 1 so an employee
+        # approved for *every* task (numApprovedTasks == num_tasks) has a slot.
+        buckets = [[] for _ in range(num_tasks + 1)]
+        for employee in employees:
+            buckets[employee.numApprovedTasks].append(employee)
+        for bucket in buckets:
+            self._rng.shuffle(bucket)
+        # Most-constrained-first ordering (fewest approvals first). Bucket 0 holds
+        # employees approved for nothing -- they can't be placed, so drop them from
+        # the working list; they resurface in 'Unassigned' via findUnassignedEmployees.
+        self._employeesToAssign = [emp for bucket in buckets[1:] for emp in bucket]
 
-         for i in range(len(employees)):
-               employee = employees[i]
-               if i == len(employees)-1:
-                    updateEmployees = []
-               else:
-                    updateEmployees = employees[i+1:]
+    @property
+    def maxPossibleAssignment(self):
+        return self._maxPossibleAssignment
 
-               if employee.numApprovedTasks == 0:
-                    key = list(self.taskAssignments.keys())[0]
-                    self.taskAssignments[key].append(employee)
-                    self.taskAssignments[key] = list(dict.fromkeys(self.taskAssignments[key]))
-                    if self.fullTest():
-                         self.createCompleteAssignment()
-                         self.ensureUniqueAssignments()
-                    continue
+    @maxPossibleAssignment.setter
+    def maxPossibleAssignment(self, employees):
+        maxAssignments = {key: 0 for key in self._task_keys}
+        for employee in employees:
+            for index in employee.indexApprovedTasks:
+                maxAssignments[self._task_keys[index]] += 1
+        self._maxPossibleAssignment = maxAssignments
 
-               for j in employee.indexApprovedTasks[1:]:
-                         key = list(self.taskAssignments.keys())[j]
-                         self.taskAssignments[key].append(employee)
-                         self.adjustMaxPossible(employee, False)
-                         if self.partialTest():
-                              self.findAssignments(updateEmployees)
-                         self.taskAssignments[key].pop()
-                         self.adjustMaxPossible(employee, True)
+    def findUnassignedEmployees(self):
+        assigned = set()
+        for key, value in self.taskAssignments.items():
+            if key != 'Unassigned':
+                assigned.update(value)
+        return list(set(self._initialEmployees) - assigned)
 
-                         if key == list(self.taskAssignments.keys())[-1]:
-                              flag = False
+    def adjustMaxPossible(self, employee: e.Employee, increment: bool):
+        change = 1 if increment else -1
+        for index in employee.indexApprovedTasks:
+            self._maxPossibleAssignment[self._task_keys[index]] += change
 
-               if not flag:
-                    break
+    # --- constraint tests -------------------------------------------------------
 
-     def ensureUniqueAssignments(self):
-          list_of_dicts = self.validSchedules
-          # Convert to a normalized hashable form
-          def dict_to_tuple_unordered_lists(d):
-              return tuple(sorted((k, tuple(sorted(v))) for k, v in d.items()))
-          # Make a set of the hashable representations
-          set_of_dicts = set(dict_to_tuple_unordered_lists(d) for d in list_of_dicts)
+    def partialTestDecorator(func):
+        func.isPartialTest = True
+        return func
 
-          # Optionally, convert back to dicts (if needed)
-          unique_dicts = [dict((k, list(v)) for k, v in t) for t in set_of_dicts]
-     
-          self._validSchedules = unique_dicts
+    def fullTestDecorator(func):
+        func.isFullTest = True
+        return func
 
-     def populateAssignments(self):
-          self.assignUnqualifiedEmployees()
-          self.findAssignments(self.employeesToAssign)
+    @partialTestDecorator
+    def testLengthPartial(self):
+        """Prune branches where a task has already exceeded its target headcount."""
+        for i, (key, value) in enumerate(self.taskAssignments.items()):
+            if key == 'Unassigned':
+                continue
+            if self.constraints.taskMins[i] < len(value):
+                return False
+        return True
 
-     def writeAssignmentsToExcel(self, filePath: str = ''):
-          for i, assignment in enumerate(self.validSchedules):
-               rows = []
-               timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-               for task, employees in assignment.items():
-                    for employee in employees:
-                         rows.append({
-                              "Name": employee.name,
-                              "ID": employee.id,
-                              "Function": task
-                         })
-               df = pd.DataFrame(rows)
-               df.to_excel(f'{filePath}_Schedule_{i+1}_{timestamp}.xlsx', index=False)
-         
+    @partialTestDecorator
+    def testTaskMins(self):
+        """Prune branches where the remaining talent pool can't reach a task's min."""
+        for i, (key, value) in enumerate(self.taskAssignments.items()):
+            if key == 'Unassigned':
+                continue
+            taskMin = self.constraints.taskMins[i]
+            talentPool = len(value) + self.maxPossibleAssignment[key]
+            if talentPool < taskMin and taskMin != float('inf'):
+                return False
+        return True
 
+    @fullTestDecorator
+    def testLengthFull(self):
+        """A schedule is complete only when every task hits its target exactly."""
+        for i, (key, value) in enumerate(list(self.taskAssignments.items())[1:]):
+            if self.constraints.taskMins[i + 1] != len(value):
+                return False
+        return True
 
-     
+    def _cache_tests(self):
+        """Discover the decorated constraint methods once instead of on every node."""
+        self._partial_tests = []
+        self._full_tests = []
+        for name in dir(self):
+            method = getattr(self, name)
+            if not callable(method):
+                continue
+            if getattr(method, 'isPartialTest', False):
+                self._partial_tests.append(method)
+            elif getattr(method, 'isFullTest', False):
+                self._full_tests.append(method)
+
+    def partialTest(self):
+        return all(test() for test in self._partial_tests)
+
+    def fullTest(self):
+        return all(test() for test in self._full_tests)
+
+    # --- search -----------------------------------------------------------------
+
+    @staticmethod
+    def _signature(assignment):
+        """Order-independent identity of an assignment, for de-duplication."""
+        return tuple(sorted(
+            (key, tuple(sorted(str(emp.id) for emp in emps)))
+            for key, emps in assignment.items()
+        ))
+
+    def createCompleteAssignment(self):
+        assignment = dict(self.taskAssignments)
+        assignment['Unassigned'] = self.findUnassignedEmployees()
+        signature = self._signature(assignment)
+        if signature in self._schedule_signatures:
+            return
+        self._schedule_signatures.add(signature)
+        # Shallow-copy each task list; Employee objects are not mutated during the
+        # search, so a deepcopy is unnecessary (and much slower).
+        self._validSchedules.append({task: list(emps) for task, emps in assignment.items()})
+
+    def _budget_exceeded(self):
+        if self._deadline is not None and time.monotonic() >= self._deadline:
+            return True
+        if self._max_nodes is not None and self._nodes >= self._max_nodes:
+            return True
+        return False
+
+    def findAssignments(self, employees: list[e.Employee]):
+        if self._budget_exceeded():
+            return
+        self._nodes += 1
+        if len(self._validSchedules) >= self.maxLength:
+            return
+        if self.fullTest():
+            self.createCompleteAssignment()
+            return
+
+        for i in range(len(employees)):
+            if len(self._validSchedules) >= self.maxLength or self._budget_exceeded():
+                return
+            employee = employees[i]
+            remaining = employees[i + 1:]
+            # indexApprovedTasks[0] is always 0 ('Unassigned'); skip it and try each
+            # task the employee is actually approved for.
+            for j in employee.indexApprovedTasks[1:]:
+                key = self._task_keys[j]
+                self.taskAssignments[key].append(employee)
+                self.adjustMaxPossible(employee, False)
+                if self.partialTest():
+                    self.findAssignments(remaining)
+                self.taskAssignments[key].pop()
+                self.adjustMaxPossible(employee, True)
+
+    def populateAssignments(self):
+        if self._time_budget_s is not None:
+            self._deadline = time.monotonic() + self._time_budget_s
+        self.findAssignments(self.employeesToAssign)
+        return self._validSchedules
+
+    def writeAssignmentsToExcel(self, filePath: str = ''):
+        """Convenience for local/notebook use: write one .xlsx per schedule to disk.
+
+        Web callers should use the in-memory serializers in ``io_adapters`` instead.
+        """
+        from io_adapters import write_schedules_to_excel_files
+        write_schedules_to_excel_files(self._validSchedules, filePath)
