@@ -88,6 +88,26 @@ def parse_roster_form(payload: dict):
 
 # --- output serializers -----------------------------------------------------
 
+# Cells beginning with one of these are interpreted as a formula by Excel/Sheets.
+_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _sanitize_cell(value):
+    """Neutralize spreadsheet formula injection (OWASP CSV injection).
+
+    Employee names, IDs, and task names are user-supplied and end up in downloadable
+    files. If a string cell would be read as a formula, prefix it with a single quote
+    so the spreadsheet treats it as text. Non-string cells pass through unchanged.
+    """
+    if isinstance(value, str) and value[:1] in _FORMULA_TRIGGERS:
+        return "'" + value
+    return value
+
+
+def _sanitize_table(table: list[dict]) -> list[dict]:
+    return [{key: _sanitize_cell(val) for key, val in row.items()} for row in table]
+
+
 def _schedule_to_rows(assignment: dict) -> list[dict]:
     rows = []
     for task, employees in assignment.items():
@@ -97,7 +117,11 @@ def _schedule_to_rows(assignment: dict) -> list[dict]:
 
 
 def schedules_to_json(schedules: list[dict]) -> list[list[dict]]:
-    """Convert internal ``{task: [Employee]}`` schedules to JSON-serializable tables."""
+    """Convert internal ``{task: [Employee]}`` schedules to JSON-serializable tables.
+
+    Not sanitized on purpose: JSON is safe structured data, and escaping for display
+    is the frontend's responsibility. Only the file exports below are sanitized.
+    """
     return [_schedule_to_rows(assignment) for assignment in schedules]
 
 
@@ -109,7 +133,7 @@ def results_to_xlsx_bytes(results: list[list[dict]]) -> bytes:
             pd.DataFrame(columns=_OUTPUT_COLUMNS).to_excel(
                 writer, index=False, sheet_name="Schedule_1")
         for i, table in enumerate(results, start=1):
-            pd.DataFrame(table, columns=_OUTPUT_COLUMNS).to_excel(
+            pd.DataFrame(_sanitize_table(table), columns=_OUTPUT_COLUMNS).to_excel(
                 writer, index=False, sheet_name=f"Schedule_{i}")
     return buffer.getvalue()
 
@@ -118,7 +142,7 @@ def results_to_csv_bytes(results: list[list[dict]]) -> bytes:
     """Single CSV; a leading ``Schedule`` column distinguishes each schedule."""
     rows = []
     for i, table in enumerate(results, start=1):
-        for row in table:
+        for row in _sanitize_table(table):
             rows.append({"Schedule": i, **row})
     df = pd.DataFrame(rows, columns=["Schedule"] + _OUTPUT_COLUMNS)
     return df.to_csv(index=False).encode("utf-8")
@@ -130,7 +154,7 @@ def write_schedules_to_excel_files(schedules: list[dict], filePath: str = "") ->
     for i, assignment in enumerate(schedules, start=1):
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         path = f"{filePath}_Schedule_{i}_{timestamp}.xlsx"
-        pd.DataFrame(_schedule_to_rows(assignment), columns=_OUTPUT_COLUMNS).to_excel(
-            path, index=False)
+        rows = _sanitize_table(_schedule_to_rows(assignment))
+        pd.DataFrame(rows, columns=_OUTPUT_COLUMNS).to_excel(path, index=False)
         paths.append(path)
     return paths

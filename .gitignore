@@ -172,3 +172,15 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# --- SchedulingCSP: keep real employee data (PII) out of this public repo ---
+# The tracked EmployeeDatabase*.xlsx are synthetic ("Employee N") samples and stay.
+# Put any real roster in data/ (ignored) or name it *_real.xlsx / *_real.csv so it
+# can never be committed by accident.
+/data/
+*_real.xlsx
+*_real.csv
+
+# Generated schedule downloads
+schedules.xlsx
+schedules.csv
