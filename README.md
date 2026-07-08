@@ -24,7 +24,7 @@ Employees are defined by an ID, a name, and a boolean "approved for this task?" 
 import io_adapters as ia
 from solver import solve
 
-employees, tasks = ia.parse_roster_xlsx(open("EmployeeDatabase.xlsx", "rb").read())
+employees, tasks = ia.parse_roster_xlsx(open("datasets/EmployeeDatabase.xlsx", "rb").read())
 result = solve(employees, minimums=[60, 5, 1, 3, 2, 1, 2], max_schedules=10, seed=0)
 # result == {"count": 10, "schedules": [[{"Name","ID","Function"}, ...], ...]}
 ```

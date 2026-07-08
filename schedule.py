@@ -66,6 +66,15 @@ class Schedule:
         return self._validSchedules
 
     @property
+    def nodes(self):
+        """Search nodes visited during the last populateAssignments() run.
+
+        Deterministic for a fixed seed; used by the test harness as a stable
+        performance signal instead of flaky wall-clock timing.
+        """
+        return self._nodes
+
+    @property
     def constraints(self):
         return self._constraints
 
