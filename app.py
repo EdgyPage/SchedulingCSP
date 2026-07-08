@@ -1,9 +1,9 @@
-"""Single-service FastAPI app: solver API + (optionally) the built frontend.
+"""Single-service FastAPI app: solver API + the frontend.
 
 Deploy as one persistent web service (e.g. a Render web service) so long CSP runs
-aren't cut off by a serverless timeout. If a built frontend exists at
-``frontend/dist`` it is served from this same app, so there is one URL and no CORS
-to manage in production.
+aren't cut off by a serverless timeout. The static UI in ``frontend/`` (or a built
+``frontend/dist`` if one is ever produced) is served from this same app, so there is
+one URL and no CORS to manage in production.
 
     uvicorn app:app --host 0.0.0.0 --port 8000
 
@@ -106,6 +106,20 @@ def _run_solver(employees, task_names, minimums, max_schedules, time_budget_s, s
     return {"tasks": task_names, **result}
 
 
+def _parse_upload(filename, content):
+    """Parse an uploaded roster into ``(employees, task_names)`` by file extension.
+
+    Shared by /api/solve/file and /api/inspect. CPU/IO-bound (pandas read); callers
+    run it in a threadpool. Raises ValueError on an unsupported extension.
+    """
+    name = (filename or "").lower()
+    if name.endswith(".csv"):
+        return io_adapters.parse_roster_csv(content)
+    if name.endswith((".xlsx", ".xls")):
+        return io_adapters.parse_roster_xlsx(content)
+    raise ValueError("Upload a .xlsx or .csv file.")
+
+
 @app.post("/api/solve", dependencies=[Depends(require_api_key)])
 def solve_from_form(req: SolveRequest):
     """Solve from form-entered data (JSON body)."""
@@ -143,24 +157,34 @@ async def solve_from_file(
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="minimums must be a JSON array.")
 
-    name = (file.filename or "").lower()
-
-    def parse():
-        if name.endswith(".csv"):
-            return io_adapters.parse_roster_csv(content)
-        if name.endswith((".xlsx", ".xls")):
-            return io_adapters.parse_roster_xlsx(content)
-        raise ValueError("Upload a .xlsx or .csv file.")
-
     # Parsing and solving are CPU/IO-bound; keep them off the event loop so one
     # heavy request can't stall every other connection.
     try:
-        employees, task_names = await run_in_threadpool(parse)
+        employees, task_names = await run_in_threadpool(_parse_upload, file.filename, content)
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return await run_in_threadpool(
         _run_solver, employees, task_names, mins, max_schedules, time_budget_s, seed,
     )
+
+
+@app.post("/api/inspect", dependencies=[Depends(require_api_key)])
+async def inspect_file(file: UploadFile = File(...)):
+    """Return the task columns (and employee count) of an uploaded roster.
+
+    The UI calls this first so it can render one target-headcount input per task
+    before the user solves. Same upload guards as /api/solve/file.
+    """
+    if file.size is not None and file.size > config.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Uploaded file too large.")
+    content = await file.read()
+    if len(content) > config.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Uploaded file too large.")
+    try:
+        employees, task_names = await run_in_threadpool(_parse_upload, file.filename, content)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"tasks": task_names, "employee_count": len(employees)}
 
 
 @app.post("/api/export", dependencies=[Depends(require_api_key)])
@@ -183,10 +207,17 @@ def export(req: ExportRequest, format: str = "xlsx"):
     )
 
 
-# Serve the built frontend from this same service if present. Mounted last so it does
-# not shadow the /api routes. Until a frontend is built, expose a simple health route.
-_FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
-if os.path.isdir(_FRONTEND_DIR):
+# Serve the frontend from this same service. Mounted last so it never shadows the
+# /api routes. Prefer a built SPA output (frontend/dist) if one is ever produced;
+# otherwise serve the committed no-build static site (frontend/). Until either exists,
+# fall back to a simple JSON health route.
+_HERE = os.path.dirname(__file__)
+_FRONTEND_DIR = next(
+    (d for d in (os.path.join(_HERE, "frontend", "dist"), os.path.join(_HERE, "frontend"))
+     if os.path.isfile(os.path.join(d, "index.html"))),
+    None,
+)
+if _FRONTEND_DIR:
     app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
 else:
     @app.get("/")
@@ -194,5 +225,6 @@ else:
         return {
             "status": "ok",
             "message": "SchedulingCSP API. POST /api/solve (form JSON) or "
-                       "/api/solve/file (upload), then /api/export?format=xlsx|csv.",
+                       "/api/solve/file (upload); /api/inspect for task columns; "
+                       "then /api/export?format=xlsx|csv.",
         }

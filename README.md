@@ -36,6 +36,8 @@ Roster layout: an `ID` column, a `Name` column, then one column per task (truthy
 
 - `POST /api/solve` — solve from form data (JSON body: `tasks`, `employees`, `minimums`, …).
 - `POST /api/solve/file` — solve from an uploaded `.xlsx`/`.csv` (`minimums` as a JSON array field).
+- `POST /api/inspect` — return a roster's task columns + employee count (so the UI can build a
+  target-per-task form before solving).
 - `POST /api/export?format=xlsx|csv` — download already-computed schedules as a file.
 
 Run locally:
@@ -44,11 +46,23 @@ pip install -r requirements.txt
 uvicorn app:app --reload
 ```
 
+## Web UI
+A no-build static frontend (plain HTML/CSS/JS in `frontend/`) is served by the same app at `/`.
+Open the running service in a browser and:
+1. **Upload** an `.xlsx`/`.csv` roster — the task columns are detected via `/api/inspect`.
+2. **Set** a target headcount per task plus options (`max_schedules`, optional `time_budget_s`,
+   `seed`), then **Solve**.
+3. **View** each schedule and **download** the results as `.xlsx` or `.csv`.
+
+The UI sends no auth header, so it assumes the service runs **open** (no `API_KEY` set); the
+server-side caps in `config.py` bound every request. To restrict *who* can reach it, use a
+platform-level control (e.g. Render password/IP protection) rather than a client-side key.
+
 ## Deployment
 Designed to run as a **single persistent web service** (e.g. a Render web service), which has
-no serverless request-timeout cliff — long CSP runs finish instead of being cut off. A built
-frontend placed at `frontend/dist` is served from the same app (one URL, no CORS). The
-`time_budget_s` option is the backstop so responses stay bounded.
+no serverless request-timeout cliff — long CSP runs finish instead of being cut off. The static
+frontend in `frontend/` (or a build output at `frontend/dist`) is served from the same app (one
+URL, no CORS). The `time_budget_s` option is the backstop so responses stay bounded.
 
 ### Render (blueprint)
 `render.yaml` describes the service. In the Render dashboard: **New → Blueprint** → connect this
@@ -57,9 +71,10 @@ repo → it reads `render.yaml`. The start command binds to Render's injected `$
 `str | None`, so needs ≥ 3.10).
 
 Environment variables (see `config.py` for the full set):
-- `API_KEY` — the blueprint auto-generates one (`generateValue: true`); after the first deploy,
-  copy it from the service's **Environment** tab. When set, every `/api/*` request must send a
-  matching `X-API-Key` header, so any client (including a future frontend) needs that key.
+- `API_KEY` — when set, every `/api/*` request must send a matching `X-API-Key` header. **Leave it
+  unset** for the browser UI to work (the page sends no key); the server-side caps still bound every
+  request. The `render.yaml` blueprint can auto-generate one (`generateValue: true`) if you instead
+  want a locked-down, API-only deployment.
 - `ALLOWED_ORIGINS` — comma-separated CORS allowlist; leave unset until a browser frontend exists
   (CORS only affects browser calls, not server-to-server/curl).
 - Optional caps: `MAX_EMPLOYEES`, `MAX_TASKS`, `MAX_SCHEDULES`, `MAX_TIME_BUDGET_S`,

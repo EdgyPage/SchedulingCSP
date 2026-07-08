@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SchedulingCSP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>SchedulingCSP</h1>
+      <p class="subtitle">
+        Upload a roster, set a target headcount per task, and generate schedules that fill
+        every task by exactly its target. Leftover staff go to <em>Unassigned</em>.
+      </p>
+    </header>
+
+    <!-- Step 1: upload -->
+    <section class="card" id="upload-card">
+      <h2><span class="step">1</span> Upload roster</h2>
+      <p class="hint">
+        An <code>.xlsx</code> or <code>.csv</code> with an <code>ID</code> column, a
+        <code>Name</code> column, then one column per task (a truthy cell = approved for it).
+      </p>
+      <label class="file-input">
+        <input type="file" id="file" accept=".xlsx,.xls,.csv" />
+        <span>Choose file…</span>
+      </label>
+      <p class="roster-summary" id="roster-summary" hidden></p>
+    </section>
+
+    <!-- Step 2: parameters -->
+    <section class="card" id="params-card" hidden>
+      <h2><span class="step">2</span> Set targets &amp; options</h2>
+
+      <h3>Target headcount per task</h3>
+      <div class="targets-grid" id="targets"></div>
+
+      <h3>Options</h3>
+      <div class="options-grid">
+        <label>
+          Max schedules
+          <input type="number" id="max_schedules" min="1" step="1" value="10" />
+          <small>How many distinct schedules to return (server caps at 50).</small>
+        </label>
+        <label>
+          Time budget (seconds)
+          <input type="number" id="time_budget_s" min="0" step="0.5" placeholder="default" />
+          <small>Optional search backstop (server caps at 30s).</small>
+        </label>
+        <label>
+          Seed
+          <input type="number" id="seed" step="1" placeholder="none" />
+          <small>Optional — set for reproducible results.</small>
+        </label>
+      </div>
+
+      <button id="solve" class="primary">Solve</button>
+      <p class="loading" id="loading" hidden>
+        Solving… the first run after idle can take up to ~60s to wake the server, then up to ~30s to search.
+      </p>
+    </section>
+
+    <!-- Errors -->
+    <p class="error" id="error" role="alert" hidden></p>
+
+    <!-- Step 3: results -->
+    <section class="card" id="results-card" hidden>
+      <h2><span class="step">3</span> Results</h2>
+      <p class="results-summary" id="results-summary"></p>
+
+      <div class="results-controls" id="results-controls" hidden>
+        <label>
+          Schedule
+          <select id="schedule-select"></select>
+        </label>
+        <div class="export">
+          <button id="export-xlsx">Download .xlsx</button>
+          <button id="export-csv">Download .csv</button>
+        </div>
+      </div>
+
+      <div class="table-wrap" id="table-wrap"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>SchedulingCSP · served by the same FastAPI app · no data leaves your request.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
