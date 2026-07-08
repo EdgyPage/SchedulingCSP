@@ -50,6 +50,22 @@ no serverless request-timeout cliff — long CSP runs finish instead of being cu
 frontend placed at `frontend/dist` is served from the same app (one URL, no CORS). The
 `time_budget_s` option is the backstop so responses stay bounded.
 
+### Render (blueprint)
+`render.yaml` describes the service. In the Render dashboard: **New → Blueprint** → connect this
+repo → it reads `render.yaml`. The start command binds to Render's injected `$PORT`
+(`uvicorn app:app --host 0.0.0.0 --port $PORT`) and `PYTHON_VERSION` is pinned (the code uses
+`str | None`, so needs ≥ 3.10).
+
+Environment variables (see `config.py` for the full set):
+- `API_KEY` — the blueprint auto-generates one (`generateValue: true`); after the first deploy,
+  copy it from the service's **Environment** tab. When set, every `/api/*` request must send a
+  matching `X-API-Key` header, so any client (including a future frontend) needs that key.
+- `ALLOWED_ORIGINS` — comma-separated CORS allowlist; leave unset until a browser frontend exists
+  (CORS only affects browser calls, not server-to-server/curl).
+- Optional caps: `MAX_EMPLOYEES`, `MAX_TASKS`, `MAX_SCHEDULES`, `MAX_TIME_BUDGET_S`,
+  `MAX_UPLOAD_BYTES`. On the free tier (512 MB / shared CPU, spins down when idle) consider
+  lowering these for large rosters.
+
 ## Development
 ```bash
 pip install -r requirements-dev.txt
