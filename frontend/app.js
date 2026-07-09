@@ -13,6 +13,8 @@ const els = {
   maxSchedules: document.getElementById("max_schedules"),
   timeBudget: document.getElementById("time_budget_s"),
   seed: document.getElementById("seed"),
+  metric: document.getElementById("metric"),
+  mode: document.getElementById("mode"),
   solve: document.getElementById("solve"),
   loading: document.getElementById("loading"),
   error: document.getElementById("error"),
@@ -29,6 +31,7 @@ const state = {
   file: null,       // the selected File, reused for inspect + solve
   tasks: [],        // task column names, in order
   schedules: null,  // last solve's schedules array (for export + display)
+  exportMeta: null, // near-miss context to attach on export (null for exact results)
 };
 
 // --- helpers ---------------------------------------------------------------
@@ -87,6 +90,7 @@ els.file.addEventListener("change", async () => {
   els.paramsCard.hidden = true;
   els.resultsCard.hidden = true;
   state.schedules = null;
+  state.exportMeta = null;
 
   const form = new FormData();
   form.append("file", file);
@@ -130,8 +134,8 @@ els.solve.addEventListener("click", async () => {
   clearError();
 
   const minimums = [...els.targets.querySelectorAll("input")].map((i) => Number(i.value));
-  if (minimums.some((m) => !Number.isFinite(m) || m < 0)) {
-    showError("Every target must be a number ≥ 0.");
+  if (minimums.some((m) => !Number.isInteger(m) || m < 0)) {
+    showError("Every target must be a whole number ≥ 0.");
     return;
   }
 
@@ -139,6 +143,8 @@ els.solve.addEventListener("click", async () => {
   form.append("file", state.file);
   form.append("minimums", JSON.stringify(minimums));
   form.append("max_schedules", String(Number(els.maxSchedules.value) || 10));
+  form.append("metric", els.metric.value);
+  form.append("mode", els.mode.value);
   const budget = numberOrNull(els.timeBudget);
   if (budget !== null) form.append("time_budget_s", String(budget));
   const seed = numberOrNull(els.seed);
@@ -159,32 +165,102 @@ els.solve.addEventListener("click", async () => {
 // --- step 3: results + export ----------------------------------------------
 
 function renderResults(result) {
-  state.schedules = result.schedules || [];
-  const count = result.count || 0;
-  const taskList = (result.tasks || []).join(", ");
-
   els.resultsCard.hidden = false;
-  if (count === 0) {
+  const count = result.count || 0;
+
+  if (count > 0) {
+    // Exact schedules (the happy path).
+    state.schedules = result.schedules || [];
+    state.exportMeta = null;
+    const taskList = (result.tasks || []).join(", ");
     els.resultsSummary.textContent =
-      "No complete schedule found. The targets may be infeasible for the given approvals " +
-      "(e.g. more headcount required for a task than there are people approved for it).";
-    els.resultsControls.hidden = true;
-    els.tableWrap.innerHTML = "";
+      `Found ${count} schedule${count === 1 ? "" : "s"} for tasks: ${taskList}.`;
+    populateScheduleSelect(state.schedules.map((_, i) => `Schedule ${i + 1}`));
+    els.resultsControls.hidden = false;
+    renderScheduleTable(0);
     return;
   }
 
-  els.resultsSummary.textContent =
-    `Found ${count} schedule${count === 1 ? "" : "s"} for tasks: ${taskList}.`;
+  renderInfeasible(result);
+}
 
-  els.scheduleSelect.innerHTML = "";
-  state.schedules.forEach((_, i) => {
-    const opt = document.createElement("option");
-    opt.value = String(i);
-    opt.textContent = `Schedule ${i + 1}`;
-    els.scheduleSelect.appendChild(opt);
-  });
+// count === 0: explain why no exact schedule exists, then show the closest we can staff.
+function renderInfeasible(result) {
+  const info = result.infeasibility || {};
+  const closest = result.closest;
+
+  const reasons = [];
+  for (const r of info.reasons || []) {
+    const verb = r.available === 1 ? "person is" : "people are";
+    reasons.push(`“${escapeHtml(r.task)}” needs ${escapeHtml(r.needed)} but only ` +
+                 `${escapeHtml(r.available)} ${verb} approved for it`);
+  }
+  if (info.understaffed) {
+    reasons.push(`there are only ${escapeHtml(info.total_available)} people for ` +
+                 `${escapeHtml(info.total_needed)} required slots`);
+  }
+
+  let html = "<strong>No schedule can hit your targets exactly.</strong>";
+  if (reasons.length) html += "<br>Why: " + reasons.join("; ") + ".";
+
+  if (!closest || !(closest.schedules || []).length) {
+    els.resultsSummary.innerHTML = html;
+    els.resultsControls.hidden = true;
+    els.tableWrap.innerHTML = "";
+    state.schedules = null;
+    state.exportMeta = null;
+    return;
+  }
+
+  const n = closest.schedules.length;
+  html += "<br>" + (n === 1 ? "Here is the closest schedule" : `Here are the ${n} closest schedules`) +
+          ` we can staff (${escapeHtml(closest.mode)} search, ${metricLabel(closest.metric)}):`;
+  els.resultsSummary.innerHTML = html;
+
+  state.schedules = closest.schedules.map((s) => s.table);
+  state.exportMeta = buildExportMeta(result);
+  populateScheduleSelect(closest.schedules.map((s, i) => closestLabel(s, i)));
   els.resultsControls.hidden = false;
   renderScheduleTable(0);
+}
+
+function metricLabel(metric) {
+  return metric === "l1" ? "ranked by headcount shortfall" : "ranked by cosine similarity";
+}
+
+function closestLabel(s, i) {
+  const short = (s.shortfall || [])
+    .map((v, k) => (v > 0 ? `${state.tasks[k] || "task " + (k + 1)} short ${v}` : null))
+    .filter(Boolean);
+  const detail = short.length ? ` — ${short.join(", ")}` : " — all tasks covered";
+  return `Closest ${i + 1}: ${s.covered}/${s.target_total} filled${detail}`;
+}
+
+function buildExportMeta(result) {
+  const closest = result.closest;
+  return {
+    tasks: result.tasks || state.tasks,
+    target: closest.target,
+    metric: closest.metric,
+    mode: closest.mode,
+    schedules: closest.schedules.map((s) => ({
+      distance: s.distance,
+      coverage: s.coverage,
+      shortfall: s.shortfall,
+      covered: s.covered,
+      target_total: s.target_total,
+    })),
+  };
+}
+
+function populateScheduleSelect(labels) {
+  els.scheduleSelect.innerHTML = "";
+  labels.forEach((label, i) => {
+    const opt = document.createElement("option");
+    opt.value = String(i);
+    opt.textContent = label;
+    els.scheduleSelect.appendChild(opt);
+  });
 }
 
 els.scheduleSelect.addEventListener("change", () => {
@@ -209,11 +285,13 @@ function renderScheduleTable(index) {
 async function exportSchedules(format) {
   if (!state.schedules || state.schedules.length === 0) return;
   clearError();
+  const payload = { schedules: state.schedules };
+  if (state.exportMeta) payload.meta = state.exportMeta;
   try {
     const res = await fetch(`/api/export?format=${format}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ schedules: state.schedules }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       let detail = `Export failed (${res.status}).`;

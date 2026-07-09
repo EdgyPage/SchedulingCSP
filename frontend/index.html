@@ -12,7 +12,9 @@
       <h1>SchedulingCSP</h1>
       <p class="subtitle">
         Upload a roster, set a target headcount per task, and generate schedules that fill
-        every task by exactly its target. Leftover staff go to <em>Unassigned</em>.
+        every task by exactly its target. Leftover staff go to <em>Unassigned</em>. If no exact
+        schedule is possible, you'll get the closest achievable ones — with what's short spelled
+        out — and can download any of them.
       </p>
     </header>
 
@@ -53,6 +55,23 @@
           Seed
           <input type="number" id="seed" step="1" placeholder="none" />
           <small>Optional — set for reproducible results.</small>
+        </label>
+        <label>
+          Closeness metric
+          <select id="metric">
+            <option value="cosine">Cosine similarity</option>
+            <option value="l1">Headcount shortfall</option>
+          </select>
+          <small>If targets can't be met exactly, how “closest” is judged.</small>
+        </label>
+        <label>
+          Search mode
+          <select id="mode">
+            <option value="auto">Auto</option>
+            <option value="fast">Fast</option>
+            <option value="thorough">Thorough</option>
+          </select>
+          <small>Auto runs a quick pass, then a deeper search only if needed.</small>
         </label>
       </div>
 
