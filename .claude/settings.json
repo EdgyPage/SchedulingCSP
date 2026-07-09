@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(python -c \"import openpyxl, fastapi, pydantic; print\\('openpyxl', openpyxl.__version__\\)\")"
+    ]
+  }
+}
