@@ -11,11 +11,17 @@ returning whatever it found so far. That guarantees a response regardless of inp
 size, which matters when this runs behind a web request.
 """
 
+import heapq
 import random
 import time
 
 import employee as e
 import constraints as c
+from scoring import rank_key
+
+# Safety backstop for the relaxed close search when the caller sets no budget at all
+# (the web layer always passes a time budget; direct solve() calls may not).
+_CLOSE_DEFAULT_NODE_CAP = 1_000_000
 
 
 class Schedule:
@@ -256,6 +262,124 @@ class Schedule:
             self._deadline = time.monotonic() + self._time_budget_s
         self.findAssignments(self.employeesToAssign)
         return self._validSchedules
+
+    # --- closest-schedule search (runs only when no exact schedule exists) -------
+
+    def search_close(self, top_n, metric_fn, relaxed):
+        """Find up to ``top_n`` maximal assignments closest to the ideal coverage.
+
+        ``metric_fn(coverage, ideal) -> distance`` ranks candidates (smaller = closer).
+        ``relaxed=False`` (Fast) keeps the exact search's ``testTaskMins`` pruning, so it
+        never blows up; ``relaxed=True`` (Thorough) drops it and instead prunes by a score
+        branch-and-bound. The search runs on its own node counter so the exact-search perf
+        signal (``Schedule.nodes``) is untouched. Returns a list of
+        ``(assignment, coverage, distance)`` ordered closest-first.
+        """
+        # Reset the working state (defensive: it is already clean after a full search).
+        self.taskAssignments = None
+        self.maxPossibleAssignment = self._initialEmployees
+
+        self._close_top_n = max(1, top_n)
+        self._close_metric = metric_fn
+        self._close_relaxed = relaxed
+        self._close_ideal = list(self.constraints.taskMins[1:])
+        self._close_heap = []          # min-heap on a reversed key => root is the worst kept
+        self._close_sigs = set()
+        self._close_tiebreak = 0
+        self._close_nodes = 0
+        self._close_max_nodes = self._max_nodes if self._max_nodes is not None \
+            else _CLOSE_DEFAULT_NODE_CAP
+        # Fresh deadline: the exact pass may already have spent the original budget.
+        if self._time_budget_s is not None:
+            self._deadline = time.monotonic() + self._time_budget_s
+
+        self._search_close(0)
+
+        payloads = [entry[1] for entry in self._close_heap]
+        payloads.sort(key=lambda p: p[3])          # by rank tuple, closest first
+        return [(assignment, coverage, distance)
+                for (assignment, coverage, distance, _rank) in payloads]
+
+    def _close_budget_exceeded(self):
+        if self._deadline is not None and time.monotonic() >= self._deadline:
+            return True
+        return self._close_nodes >= self._close_max_nodes
+
+    def _search_close(self, idx):
+        if self._close_budget_exceeded():
+            return
+        self._close_nodes += 1
+        # Thorough-mode branch-and-bound: abandon a subtree whose best possible completion
+        # can't out-rank the worst candidate already kept (reuses the maxPossible pool
+        # bound). This is what replaces testTaskMins as the search's real bound.
+        if self._close_relaxed and self._heap_full() and not self._can_improve():
+            return
+        employees = self.employeesToAssign
+        if idx >= len(employees):
+            self._record_close()
+            return
+        employee = employees[idx]
+        placed_any = False
+        for j in employee.indexApprovedTasks[1:]:
+            key = self._task_keys[j]
+            if len(self.taskAssignments[key]) >= self.constraints.taskMins[j]:
+                continue                               # task already at its target (cap)
+            self.taskAssignments[key].append(employee)
+            self.adjustMaxPossible(employee, False)
+            if self._close_relaxed or self.testTaskMins():
+                placed_any = True
+                self._search_close(idx + 1)
+            self.taskAssignments[key].pop()
+            self.adjustMaxPossible(employee, True)
+            if self._close_budget_exceeded():
+                return
+        if not placed_any:
+            # Employee can't be placed now (every approved task is full or pruned); bench
+            # them and continue. Their tasks only get fuller, so the leaf stays maximal.
+            self._search_close(idx + 1)
+
+    def _heap_full(self):
+        return len(self._close_heap) >= self._close_top_n
+
+    def _can_improve(self):
+        """Could the best completion reachable from here beat the worst kept candidate?
+
+        Optimistic: assume every task fills to its target from its remaining pool (ignores
+        that employees are shared, so it never under-estimates coverage). Admissible for
+        the L1 metric; a strong heuristic for cosine.
+        """
+        best_cov = []
+        for k in range(1, len(self._task_keys)):
+            key = self._task_keys[k]
+            ceiling = len(self.taskAssignments[key]) + self.maxPossibleAssignment[key]
+            best_cov.append(min(self.constraints.taskMins[k], ceiling))
+        best_rank = (self._close_metric(best_cov, self._close_ideal), -sum(best_cov))
+        worst_rank = self._close_heap[0][1][3]
+        return best_rank < (worst_rank[0], worst_rank[1])
+
+    def _record_close(self):
+        coverage = [len(self.taskAssignments[self._task_keys[k]])
+                    for k in range(1, len(self._task_keys))]
+        covered = sum(coverage)
+        if covered == 0:
+            return                                     # nothing placed -> not worth showing
+        assignment = dict(self.taskAssignments)
+        assignment['Unassigned'] = self.findUnassignedEmployees()
+        signature = self._signature(assignment)
+        if signature in self._close_sigs:
+            return
+        self._close_sigs.add(signature)
+        distance = self._close_metric(coverage, self._close_ideal)
+        self._close_tiebreak += 1
+        rank = rank_key(distance, covered, self._close_tiebreak)
+        snapshot = {task: list(emps) for task, emps in assignment.items()}
+        payload = (snapshot, coverage, distance, rank)
+        # Reversed key makes heap[0] the WORST kept, so heappushpop evicts it.
+        reversed_key = (-rank[0], -rank[1], -rank[2])
+        if len(self._close_heap) < self._close_top_n:
+            heapq.heappush(self._close_heap, (reversed_key, payload))
+        else:
+            heapq.heappushpop(self._close_heap, (reversed_key, payload))
 
     def writeAssignmentsToExcel(self, filePath: str = ''):
         """Convenience for local/notebook use: write one .xlsx per schedule to disk.
