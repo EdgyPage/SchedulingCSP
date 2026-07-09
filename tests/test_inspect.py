@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app import app
 
-CSV = b"ID,Name,A,B\n1,alice,1,0\n2,bob,0,1\n3,carol,1,1\n"
+CSV = b"ID Alias,Func 1,Func 2\n1,1,0\n2,0,1\n3,1,1\n"
 
 
 def test_inspect_returns_tasks_and_count(monkeypatch):
@@ -14,7 +14,7 @@ def test_inspect_returns_tasks_and_count(monkeypatch):
     r = client.post("/api/inspect", files={"file": ("roster.csv", CSV, "text/csv")})
     assert r.status_code == 200
     body = r.json()
-    assert body["tasks"] == ["A", "B"]
+    assert body["tasks"] == ["Func 1", "Func 2"]
     assert body["employee_count"] == 3
 
 

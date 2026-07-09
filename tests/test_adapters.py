@@ -1,15 +1,16 @@
 import csv
 import io
 
+import pytest
 from openpyxl import load_workbook
 
 import io_adapters as ia
 
 ROWS = [
-    {"ID": 1, "Name": "Alice", "A": True, "B": False},
-    {"ID": 2, "Name": "Bob", "A": False, "B": True},
+    {"ID Alias": 1, "Func 1": True, "Func 2": False},
+    {"ID Alias": 2, "Func 1": False, "Func 2": True},
 ]
-COLUMNS = ["ID", "Name", "A", "B"]
+COLUMNS = ["ID Alias", "Func 1", "Func 2"]
 
 
 def _rows_to_csv_bytes(rows, columns):
@@ -34,51 +35,51 @@ def test_parsers_agree_across_formats():
     emps_csv, tasks_csv = ia.parse_roster_csv(_rows_to_csv_bytes(ROWS, COLUMNS))
 
     form = {
-        "tasks": ["A", "B"],
+        "tasks": ["Func 1", "Func 2"],
         "employees": [
-            {"id": 1, "name": "Alice", "approved": ["A"]},
-            {"id": 2, "name": "Bob", "approved": ["B"]},
+            {"id": 1, "approved": ["Func 1"]},
+            {"id": 2, "approved": ["Func 2"]},
         ],
     }
     emps_form, tasks_form = ia.parse_roster_form(form)
 
-    assert tasks_rec == tasks_csv == tasks_form == ["A", "B"]
+    assert tasks_rec == tasks_csv == tasks_form == ["Func 1", "Func 2"]
     for group in (emps_rec, emps_csv, emps_form):
         assert [emp.taskStatuses for emp in group] == [[True, False], [False, True]]
 
 
-def test_missing_required_column_raises():
-    try:
-        ia.parse_roster_records([{"ID": 1, "A": True}], ["ID", "A"])  # no Name column
-    except ValueError as exc:
-        assert "Name" in str(exc)
-    else:
-        raise AssertionError("expected ValueError for missing Name column")
+def test_name_or_pii_column_is_rejected():
+    # A Name (or any non-'Func' column) must be refused so PII can't be uploaded.
+    with pytest.raises(ValueError, match="Unexpected column"):
+        ia.parse_roster_records(
+            [{"ID Alias": 1, "Func 1": True, "Name": "alice"}],
+            ["ID Alias", "Func 1", "Name"],
+        )
 
 
 def test_result_serializers_produce_valid_files():
     results = [
         [
-            {"Name": "alice", "ID": 1, "Function": "A"},
-            {"Name": "bob", "ID": 2, "Function": "Unassigned"},
+            {"ID Alias": 1, "Function": "Func 1"},
+            {"ID Alias": 2, "Function": "Unassigned"},
         ],
     ]
 
     xlsx = ia.results_to_xlsx_bytes(results)
     assert xlsx[:2] == b"PK"  # xlsx is a zip archive
     header, data = _read_xlsx_sheet(xlsx, "Schedule_1")
-    assert header == ["Name", "ID", "Function"]
+    assert header == ["ID Alias", "Function"]
     assert len(data) == 2
 
     csv_bytes = ia.results_to_csv_bytes(results)
-    assert b"Schedule,Name,ID,Function" in csv_bytes
+    assert b"Schedule,ID Alias,Function" in csv_bytes
 
 
 def test_closest_export_includes_summary_when_meta_given():
     """A near-miss export carries a Summary sheet / block; a plain export does not."""
-    results = [[{"Name": "alice", "ID": 1, "Function": "A"}]]
+    results = [[{"ID Alias": 1, "Function": "Func 1"}]]
     meta = {
-        "tasks": ["A", "B"], "target": [2, 1], "metric": "cosine", "mode": "thorough",
+        "tasks": ["Func 1", "Func 2"], "target": [2, 1], "metric": "cosine", "mode": "thorough",
         "schedules": [
             {"distance": 0.05, "coverage": [1, 1], "shortfall": [1, 0],
              "covered": 2, "target_total": 3},

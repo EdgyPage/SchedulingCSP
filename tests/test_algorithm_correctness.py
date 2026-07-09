@@ -97,8 +97,8 @@ def test_all_qualified_employees_are_usable(roster):
     employees, tasks = roster
     sched, _ = _solve(employees, [2, 0, 0, 0], 1000)
     for sol in sched.validSchedules:
-        t1_ids = {emp.id for emp in sol["T1"]}
-        assert t1_ids & {3, 4}, "expected an all-qualified employee to be used in T1"
+        t1_ids = {emp.id for emp in sol["Func 1"]}
+        assert t1_ids & {3, 4}, "expected an all-qualified employee to be used in Func 1"
 
 
 def test_csv_and_xlsx_rosters_are_identical():
@@ -108,8 +108,8 @@ def test_csv_and_xlsx_rosters_are_identical():
     with open(_EDGE_CSV, "rb") as fh:
         emp_c, tasks_c = ia.parse_roster_csv(fh.read())
     assert tasks_x == tasks_c
-    assert [(str(e.id), e.name, e.taskStatuses) for e in emp_x] == \
-           [(str(e.id), e.name, e.taskStatuses) for e in emp_c]
+    assert [(str(e.id), e.taskStatuses) for e in emp_x] == \
+           [(str(e.id), e.taskStatuses) for e in emp_c]
 
 
 def test_committed_dataset_matches_builder(roster, tmp_path):
@@ -125,8 +125,8 @@ def test_committed_dataset_matches_builder(roster, tmp_path):
     emp_r, tasks_r = ia.parse_roster_csv(regen.read_bytes())
 
     assert tasks_r == tasks == builder.TASKS
-    assert [(str(e.id), e.name, e.taskStatuses) for e in emp_r] == \
-           [(str(e.id), e.name, e.taskStatuses) for e in employees]
+    assert [(str(e.id), e.taskStatuses) for e in emp_r] == \
+           [(str(e.id), e.taskStatuses) for e in employees]
 
 
 @pytest.mark.xfail(

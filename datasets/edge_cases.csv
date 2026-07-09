@@ -1,16 +1,16 @@
-ID,Name,T1,T2,T3,Pool
-1,Employee 1,False,False,False,False
-2,Employee 2,False,False,False,False
-3,Employee 3,True,True,True,True
-4,Employee 4,True,True,True,True
-5,Employee 5,True,False,False,False
-6,Employee 6,False,True,False,False
-7,Employee 7,False,False,True,False
-8,Employee 8,False,False,False,True
-9,Employee 9,False,False,False,True
-10,Employee 10,False,False,False,True
-11,Employee 11,False,False,False,True
-12,Employee 12,False,False,False,True
-13,Employee 13,False,False,False,True
-14,Employee 14,False,False,False,True
-15,Employee 15,False,False,False,True
+ID Alias,Func 1,Func 2,Func 3,Func 4
+1,False,False,False,False
+2,False,False,False,False
+3,True,True,True,True
+4,True,True,True,True
+5,True,False,False,False
+6,False,True,False,False
+7,False,False,True,False
+8,False,False,False,True
+9,False,False,False,True
+10,False,False,False,True
+11,False,False,False,True
+12,False,False,False,True
+13,False,False,False,True
+14,False,False,False,True
+15,False,False,False,True

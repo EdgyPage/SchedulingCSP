@@ -5,8 +5,9 @@ shape: ``(list[Employee], list[task_name])``. Outputs are produced in-memory (no
 writes) as JSON tables, an Excel workbook, or a CSV -- suitable for returning directly
 from an HTTP handler.
 
-Expected roster layout (xlsx/csv): an ``ID`` column, a ``Name`` column, and one column
-per task whose cell is truthy when the employee is approved for that task.
+Expected roster layout (xlsx/csv): an ``ID Alias`` column (a non-repeating permutation of
+1..n) and one ``Func <int>`` column per task whose cell is True/False. No names or other
+PII -- the strict schema is enforced by :mod:`screening` on every upload.
 
 Spreadsheet/CSV I/O uses ``openpyxl`` and the stdlib ``csv`` module -- no pandas.
 """
@@ -18,10 +19,10 @@ from datetime import datetime
 from openpyxl import Workbook, load_workbook
 
 from employee import Employee
+from screening import screen_id_permutation, screen_roster, screen_task_columns
 
-ID_COL = "ID"
-NAME_COL = "Name"
-_OUTPUT_COLUMNS = ["Name", "ID", "Function"]
+ID_COL = "ID Alias"
+_OUTPUT_COLUMNS = ["ID Alias", "Function"]
 
 
 # --- helpers ----------------------------------------------------------------
@@ -74,23 +75,22 @@ def _approved_to_statuses(approved, task_names) -> list[bool]:
 
 def parse_roster_records(records: list[dict], columns: list[str]):
     """Shared parser: turn ordered ``columns`` + row ``records`` (header->cell dicts)
-    into ``(list[Employee], list[task_name])``. Used by both the xlsx and csv readers."""
-    missing = [col for col in (ID_COL, NAME_COL) if col not in columns]
-    if missing:
-        raise ValueError(f"Roster is missing required column(s): {', '.join(missing)}")
-    task_names = [col for col in columns if col not in (ID_COL, NAME_COL)]
-    if not task_names:
-        raise ValueError("Roster has no task columns.")
+    into ``(list[Employee], list[task_name])``. Used by both the xlsx and csv readers.
+
+    The de-identified schema is enforced first by :func:`screening.screen_roster`, so any
+    name/PII column, non-``Func`` column, bad ID set, or non-boolean cell raises here."""
+    screen_roster(columns, records)
+    task_names = [col for col in columns if col != ID_COL]
     employees = []
     for row in records:
         raw_id = row.get(ID_COL)
         # Skip fully-blank rows (openpyxl read_only can emit trailing empties).
         if raw_id is None or (isinstance(raw_id, str) and not raw_id.strip()):
             continue
+        emp_id = _coerce_id(raw_id)
         statuses = [_to_bool(row.get(task)) for task in task_names]
-        employees.append(
-            Employee(_coerce_id(raw_id), str(row.get(NAME_COL, "")), list(task_names), statuses)
-        )
+        # No name is uploaded; the alias itself is the only identity we keep.
+        employees.append(Employee(emp_id, str(emp_id), list(task_names), statuses))
     return employees, task_names
 
 
@@ -129,12 +129,16 @@ def parse_roster_csv(file_bytes: bytes):
 
 def parse_roster_form(payload: dict):
     task_names = list(payload["tasks"])
-    if not task_names:
-        raise ValueError("At least one task is required.")
+    screen_task_columns(task_names)          # tasks must be unique 'Func <int>' -- no PII
     employees = []
+    ids = []
     for entry in payload["employees"]:
+        emp_id = _coerce_id(entry["id"])
+        ids.append(emp_id)
         statuses = _approved_to_statuses(entry.get("approved", []), task_names)
-        employees.append(Employee(entry["id"], str(entry["name"]), list(task_names), statuses))
+        # No name is accepted from the form either; identity is the alias only.
+        employees.append(Employee(emp_id, str(emp_id), list(task_names), statuses))
+    screen_id_permutation(ids)               # ids must be a 1..n permutation
     return employees, task_names
 
 
@@ -147,9 +151,9 @@ _FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
 def _sanitize_cell(value):
     """Neutralize spreadsheet formula injection (OWASP CSV injection).
 
-    Employee names, IDs, and task names are user-supplied and end up in downloadable
-    files. If a string cell would be read as a formula, prefix it with a single quote
-    so the spreadsheet treats it as text. Non-string cells pass through unchanged.
+    Aliases and task labels are user-supplied and end up in downloadable files. If a
+    string cell would be read as a formula, prefix it with a single quote so the
+    spreadsheet treats it as text. Non-string cells pass through unchanged.
     """
     if isinstance(value, str) and value[:1] in _FORMULA_TRIGGERS:
         return "'" + value
@@ -164,7 +168,7 @@ def _schedule_to_rows(assignment: dict) -> list[dict]:
     rows = []
     for task, employees in assignment.items():
         for employee in employees:
-            rows.append({"Name": employee.name, "ID": employee.id, "Function": task})
+            rows.append({"ID Alias": employee.id, "Function": task})
     return rows
 
 

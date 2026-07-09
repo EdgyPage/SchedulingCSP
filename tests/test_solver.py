@@ -30,7 +30,7 @@ def test_zero_approval_employee_lands_in_unassigned():
     result = solve(emps, [1, 0, 0], max_schedules=1)
     assert result["count"] >= 1
     for table in result["schedules"]:
-        function_by_id = {row["ID"]: row["Function"] for row in table}
+        function_by_id = {row["ID Alias"]: row["Function"] for row in table}
         assert function_by_id.get(2) == "Unassigned"
 
 
@@ -96,7 +96,7 @@ def test_infeasible_returns_diagnostics_and_closest():
     assert top["shortfall"] == [0, 0, 2]
     assert top["covered"] == 3 and top["target_total"] == 5
     # Every employee appears exactly once across the exported table.
-    ids = sorted(row["ID"] for row in top["table"])
+    ids = sorted(row["ID Alias"] for row in top["table"])
     assert ids == [1, 2, 3]
 
 
@@ -155,7 +155,7 @@ def test_close_schedules_are_deduplicated():
     result = solve(emps, [2, 2, 0], max_schedules=20, seed=0, mode="thorough")
     seen = set()
     for s in result["closest"]["schedules"]:
-        signature = tuple(sorted((row["ID"], row["Function"]) for row in s["table"]))
+        signature = tuple(sorted((row["ID Alias"], row["Function"]) for row in s["table"]))
         assert signature not in seen
         seen.add(signature)
 

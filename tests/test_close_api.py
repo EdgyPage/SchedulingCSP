@@ -7,13 +7,13 @@ import config
 from app import app
 
 INFEASIBLE = {
-    "tasks": ["A", "B", "C"],
+    "tasks": ["Func 1", "Func 2", "Func 3"],
     "employees": [
-        {"id": 1, "name": "a", "approved": ["A"]},
-        {"id": 2, "name": "b", "approved": ["B"]},
-        {"id": 3, "name": "c", "approved": ["C"]},
+        {"id": 1, "approved": ["Func 1"]},
+        {"id": 2, "approved": ["Func 2"]},
+        {"id": 3, "approved": ["Func 3"]},
     ],
-    "minimums": [1, 1, 3],       # C needs 3 but only employee 3 can do it
+    "minimums": [1, 1, 3],       # Func 3 needs 3 but only employee 3 can do it
     "seed": 0,
 }
 
@@ -26,8 +26,8 @@ def _client(monkeypatch):
 def test_solve_endpoint_returns_infeasibility_and_closest(monkeypatch):
     body = _client(monkeypatch).post("/api/solve", json=INFEASIBLE).json()
     assert body["count"] == 0
-    assert body["tasks"] == ["A", "B", "C"]
-    assert any(r["task"] == "C" for r in body["infeasibility"]["reasons"])
+    assert body["tasks"] == ["Func 1", "Func 2", "Func 3"]
+    assert any(r["task"] == "Func 3" for r in body["infeasibility"]["reasons"])
     closest = body["closest"]
     assert closest["metric"] == "cosine" and closest["mode"] == "thorough"
     assert closest["schedules"][0]["coverage"] == [1, 1, 1]
@@ -43,9 +43,9 @@ def test_solve_endpoint_rejects_bad_metric_mode_and_minimums(monkeypatch):
 def test_export_with_meta_adds_summary(monkeypatch):
     client = _client(monkeypatch)
     payload = {
-        "schedules": [[{"Name": "a", "ID": 1, "Function": "A"}]],
+        "schedules": [[{"ID Alias": 1, "Function": "Func 1"}]],
         "meta": {
-            "tasks": ["A", "B"], "target": [1, 2], "metric": "cosine", "mode": "thorough",
+            "tasks": ["Func 1", "Func 2"], "target": [1, 2], "metric": "cosine", "mode": "thorough",
             "schedules": [{"distance": 0.1, "coverage": [1, 1], "shortfall": [0, 1],
                            "covered": 2, "target_total": 3}],
         },

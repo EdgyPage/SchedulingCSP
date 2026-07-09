@@ -2,9 +2,11 @@
 
 Run:  python datasets/build_edge_cases.py
 
-Writes ``datasets/edge_cases.xlsx`` and ``datasets/edge_cases.csv``. The roster packs
-every solver edge case into one small, tractable database so expected outputs are
-closed-form. See ``datasets/README.md`` for the design and the answer key.
+Writes ``datasets/edge_cases.xlsx`` and ``datasets/edge_cases.csv`` in the de-identified
+schema the app requires: an ``ID Alias`` column (1..n) and ``Func 1``.. columns with
+True/False cells. The roster packs every solver edge case into one small, tractable
+database so expected outputs are closed-form. See ``datasets/README.md`` for the design
+and the answer key.
 
 Uses openpyxl + the stdlib csv module (no pandas).
 """
@@ -14,29 +16,29 @@ import os
 
 from openpyxl import Workbook
 
-TASKS = ["T1", "T2", "T3", "Pool"]
-COLUMNS = ["ID", "Name"] + TASKS
+TASKS = ["Func 1", "Func 2", "Func 3", "Func 4"]
+COLUMNS = ["ID Alias"] + TASKS
 
 
 def build_rows() -> list[dict]:
     """The curated roster as a list of ``{column: value}`` rows."""
     rows = []
 
-    def add(emp_id: int, approved: set):
-        row = {"ID": emp_id, "Name": f"Employee {emp_id}"}
+    def add(alias: int, approved: set):
+        row = {"ID Alias": alias}
         for task in TASKS:
             row[task] = task in approved
         rows.append(row)
 
-    for emp_id in (1, 2):            # NoQual  -> approved for nothing
-        add(emp_id, set())
-    for emp_id in (3, 4):            # AllQual -> approved for every task
-        add(emp_id, set(TASKS))
-    add(5, {"T1"})                   # dedicated single-task specialists
-    add(6, {"T2"})
-    add(7, {"T3"})                   # only exclusive T3 body -> scarce resource
-    for emp_id in range(8, 16):      # PoolBlock: 8 interchangeable Pool workers
-        add(emp_id, {"Pool"})
+    for alias in (1, 2):             # NoQual  -> approved for nothing
+        add(alias, set())
+    for alias in (3, 4):             # AllQual -> approved for every function
+        add(alias, set(TASKS))
+    add(5, {"Func 1"})               # dedicated single-function specialists
+    add(6, {"Func 2"})
+    add(7, {"Func 3"})               # only exclusive Func 3 body -> scarce resource
+    for alias in range(8, 16):       # PoolBlock: 8 interchangeable Func 4 workers
+        add(alias, {"Func 4"})
 
     return rows
 

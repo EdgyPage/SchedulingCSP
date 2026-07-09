@@ -6,7 +6,9 @@ on which tasks they are trained/approved for. Given a per-task target headcount,
 for schedules in which **every task is filled by exactly its target number** of employees;
 anyone left over is placed in `Unassigned`.
 
-Employees are defined by an ID, a name, and a boolean "approved for this task?" flag per task.
+Employees are defined by an **ID Alias** (a non-repeating number `1..n`) and a boolean
+"approved for this function?" flag per function — **no names**. The app enforces this
+de-identified schema on every upload so PII never reaches the service.
 
 ## Modules
 - `employee.py` / `constraints.py` — domain models.
@@ -24,15 +26,17 @@ Employees are defined by an ID, a name, and a boolean "approved for this task?" 
 import io_adapters as ia
 from solver import solve
 
-employees, tasks = ia.parse_roster_xlsx(open("datasets/EmployeeDatabase.xlsx", "rb").read())
-result = solve(employees, minimums=[60, 5, 1, 3, 2, 1, 2], max_schedules=10, seed=0)
-# result == {"count": 10, "schedules": [[{"Name","ID","Function"}, ...], ...]}
+employees, tasks = ia.parse_roster_xlsx(open("datasets/edge_cases.xlsx", "rb").read())
+result = solve(employees, minimums=[1, 1, 1, 0], max_schedules=10, seed=0)
+# result == {"count": 13, "schedules": [[{"ID Alias","Function"}, ...], ...]}
 ```
-`main.ipynb` still works as before (`Schedule(...).populateAssignments()` /
-`writeAssignmentsToExcel(prefix)`).
+`main.ipynb` is a legacy exploratory notebook (old `ID`/`Name` schema, needs pandas) and is
+no longer maintained; the supported entrypoints are `solve(...)` and the web API.
 
 ## Web API
-Roster layout: an `ID` column, a `Name` column, then one column per task (truthy = approved).
+Roster layout (de-identified): an `ID Alias` column (a `1..n` permutation) plus `Func 1`,
+`Func 2`, … columns with `True`/`False` cells. **No names or other PII** — anything else is
+rejected on upload. Use the roster template (see the Instructions page) to produce a valid file.
 
 - `POST /api/solve` — solve from form data (JSON body: `tasks`, `employees`, `minimums`, …).
 - `POST /api/solve/file` — solve from an uploaded `.xlsx`/`.csv` (`minimums` as a JSON array field).
