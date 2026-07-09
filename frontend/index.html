@@ -3,13 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SchedulingCSP</title>
+  <title>Solver · SchedulingCSP</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="container">
+    <nav class="nav">
+      <a href="/" class="active">Solver</a>
+      <a href="/instructions.html">Instructions</a>
+    </nav>
     <header>
-      <h1>SchedulingCSP</h1>
+      <h1>Solver</h1>
       <p class="subtitle">
         Upload a roster, set a target headcount per task, and generate schedules that fill
         every task by exactly its target. Leftover staff go to <em>Unassigned</em>. If no exact
@@ -22,8 +26,10 @@
     <section class="card" id="upload-card">
       <h2><span class="step">1</span> Upload roster</h2>
       <p class="hint">
-        An <code>.xlsx</code> or <code>.csv</code> with an <code>ID</code> column, a
-        <code>Name</code> column, then one column per task (a truthy cell = approved for it).
+        A de-identified <code>.xlsx</code> or <code>.csv</code>: an <code>ID Alias</code>
+        column (whole numbers 1–n) and <code>Func 1</code>, <code>Func 2</code>, … columns with
+        <code>True</code>/<code>False</code> cells. <strong>No names or other personal data.</strong>
+        New here? The <a href="/instructions.html">Instructions</a> page explains it and links the roster template.
       </p>
       <label class="file-input">
         <input type="file" id="file" accept=".xlsx,.xls,.csv" />

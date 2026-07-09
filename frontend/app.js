@@ -272,13 +272,12 @@ function renderScheduleTable(index) {
   const body = rows.map((row) => {
     const isUnassigned = row.Function === "Unassigned";
     return `<tr>
-      <td>${escapeHtml(row.Name)}</td>
-      <td>${escapeHtml(row.ID)}</td>
+      <td>${escapeHtml(row["ID Alias"])}</td>
       <td class="${isUnassigned ? "unassigned" : ""}">${escapeHtml(row.Function)}</td>
     </tr>`;
   }).join("");
   els.tableWrap.innerHTML =
-    `<table><thead><tr><th>Name</th><th>ID</th><th>Function</th></tr></thead>` +
+    `<table><thead><tr><th>ID Alias</th><th>Function</th></tr></thead>` +
     `<tbody>${body}</tbody></table>`;
 }
 

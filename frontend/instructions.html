@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Instructions · SchedulingCSP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <nav class="nav">
+      <a href="/">Solver</a>
+      <a href="/instructions.html" class="active">Instructions</a>
+    </nav>
+    <header>
+      <h1>Instructions</h1>
+      <p class="subtitle">
+        How to prepare a roster the Solver will accept — without ever putting employee
+        names or other personal data online.
+      </p>
+    </header>
+
+    <!-- Why -->
+    <section class="card">
+      <h2>Why no names?</h2>
+      <p>
+        To protect you and your staff, the Solver <strong>only accepts de-identified data</strong>.
+        It never sees names, emails, or notes — just anonymous numbers and True/False flags.
+        The uploaded file must have exactly these columns and nothing else:
+      </p>
+      <ul>
+        <li><code>ID Alias</code> — a whole number for each employee: <code>1</code>, <code>2</code>,
+          <code>3</code>, … up to the number of employees, each used once, in any order.</li>
+        <li>One or more <code>Func 1</code>, <code>Func 2</code>, … columns — one per job function,
+          with a <code>True</code> or <code>False</code> in every cell (is this person approved for
+          that function?).</li>
+      </ul>
+      <p class="callout warn">
+        If the file contains a <code>Name</code> column, any other column, blank cells, or IDs that
+        aren't <code>1…n</code>, the upload is rejected. This is on purpose — it keeps personal data
+        off the internet.
+      </p>
+    </section>
+
+    <!-- The easy way: template -->
+    <section class="card">
+      <h2><span class="step">1</span> Use the roster template (easiest)</h2>
+      <p>
+        The template turns your real roster into an anonymous upload file, and turns the solved
+        schedule back into real names — all on your own computer. Nothing leaves your machine.
+      </p>
+      <a class="download-btn" href="/roster-template.xlsx" download>⬇ Download the roster template (.xlsx)</a>
+      <p>Then:</p>
+      <ol>
+        <li>Open it in Excel. On the <strong>Encoder</strong> tab, replace the example rows with your
+          real employees (their real IDs) and rename the function columns to your real function names,
+          marking each cell <code>TRUE</code> or <code>FALSE</code>.</li>
+        <li>Click <strong>Data → Refresh All</strong> (one click). The template assigns each person a
+          random <code>ID Alias</code> and fills the <strong>Encoded</strong> tab.</li>
+        <li>On the <strong>Encoded</strong> tab, select the whole table, copy it into a blank workbook,
+          and <strong>Save As</strong> a <code>.csv</code> or <code>.xlsx</code>. That is your upload file.</li>
+        <li>Go to the <a href="/">Solver</a> page, upload that file, set your target headcounts, and Solve.</li>
+      </ol>
+      <p class="callout warn">
+        Don't click <strong>Refresh All</strong> again after you've uploaded, until you've finished
+        decoding — refreshing picks new random aliases and the old file won't match.
+      </p>
+    </section>
+
+    <!-- After solving -->
+    <section class="card">
+      <h2><span class="step">2</span> Turn the results back into names</h2>
+      <p>
+        After the Solver finishes, download the schedule (<code>.xlsx</code> or <code>.csv</code>).
+        It lists an <code>ID Alias</code> and a <code>Function</code> (like <code>Func 2</code>, or
+        <code>Unassigned</code>) for each person.
+      </p>
+      <ol>
+        <li>Copy the schedule's two columns.</li>
+        <li>Paste them into the template's <strong>Decoder</strong> tab.</li>
+        <li>The real employee identifier and real function name fill in automatically — that's your
+          finished schedule.</li>
+      </ol>
+    </section>
+
+    <!-- The format, for people who build it by hand -->
+    <section class="card">
+      <h2>Building the file by hand (optional)</h2>
+      <p>If you'd rather not use the template, make a spreadsheet with exactly this shape:</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>ID Alias</th><th>Func 1</th><th>Func 2</th><th>Func 3</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>TRUE</td><td>FALSE</td><td>TRUE</td></tr>
+            <tr><td>2</td><td>FALSE</td><td>TRUE</td><td>TRUE</td></tr>
+            <tr><td>3</td><td>TRUE</td><td>TRUE</td><td>FALSE</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li>The first column must be named exactly <code>ID Alias</code>.</li>
+        <li>Its values must be the whole numbers <code>1</code> through <code>n</code> (the number of
+          rows), each used exactly once.</li>
+        <li>Every other column must be named <code>Func 1</code>, <code>Func 2</code>, … (the word
+          <code>Func</code>, a space, then a number).</li>
+        <li>Every cell under a <code>Func</code> column must be <code>True</code> or <code>False</code>
+          — no blanks, numbers, or text.</li>
+        <li>No <code>Name</code> column and no other columns of any kind.</li>
+      </ul>
+      <p class="hint">Keep a private copy of which real person each <code>ID Alias</code> refers to, so you
+        can read the results — the template's Decoder tab does this for you.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>SchedulingCSP · served by the same FastAPI app · no data leaves your request.</p>
+  </footer>
+</body>
+</html>

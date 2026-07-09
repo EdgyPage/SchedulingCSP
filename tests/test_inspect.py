@@ -48,4 +48,4 @@ def test_root_serves_frontend():
     r = client.get("/")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/html")
-    assert "<title>SchedulingCSP</title>" in r.text
+    assert "Solver" in r.text
