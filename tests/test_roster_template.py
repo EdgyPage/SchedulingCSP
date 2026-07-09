@@ -1,64 +1,42 @@
-"""Structural checks for the roster-template scaffold builder.
+"""Sanity checks for the shipped roster template (frontend/roster-template.xlsx).
 
-Excel formulas and Power Query can't run in this environment, so this only asserts the
-workbook STRUCTURE (sheets, tables, headers, and the Decoder XLOOKUP formula strings). The
-encode/decode behavior itself must be verified in Excel -- see docs/roster-template-spec.md.
+The template is authored in Excel -- it carries a Power Query that openpyxl cannot create --
+so this only confirms the downloadable file still loads and advertises the upload contract
+the site documents: an ``Encoded`` table with headers ID Alias, Func 1, Func 2, ... The
+encode/decode behavior is verified in Excel (see docs/roster-template-spec.md).
 """
 
-import importlib.util
 import os
+import re
 
 import pytest
 from openpyxl import load_workbook
 
-_HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_BUILDER = os.path.join(_HERE, "frontend", "build_roster_template.py")
+_TEMPLATE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "roster-template.xlsx")
 
 
 @pytest.fixture(scope="module")
-def wb(tmp_path_factory):
-    spec = importlib.util.spec_from_file_location("build_roster_template", _BUILDER)
-    builder = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(builder)
-    out = tmp_path_factory.mktemp("tpl") / "roster-template.xlsx"
-    builder.build(str(out))
-    return load_workbook(out)
+def wb():
+    if not os.path.exists(_TEMPLATE):
+        pytest.skip("roster template not present")
+    return load_workbook(_TEMPLATE)
 
 
-def _headers(ws, table_name):
-    return [cell.value for cell in ws[ws.tables[table_name].ref][0]]
+def _headers(wb, table_name):
+    for ws in wb.worksheets:
+        if table_name in ws.tables:
+            return [c.value for c in ws[ws.tables[table_name].ref][0]]
+    raise AssertionError(f"table {table_name!r} not found in any sheet")
 
 
-def test_sheets_and_hidden_maps(wb):
-    assert wb.sheetnames == ["Encoder", "Encoded", "Maps", "Decoder"]
-    assert wb["Maps"].sheet_state == "hidden"
+def test_template_loads_with_core_tables(wb):
+    tables = {name for ws in wb.worksheets for name in ws.tables}
+    assert {"Roster", "Encoded", "SolverOutput"} <= tables
 
 
-def test_tables_and_headers(wb):
-    assert _headers(wb["Encoder"], "Roster")[0] == "Unique Identifier"
-    assert _headers(wb["Encoded"], "Encoded") == ["ID Alias", "Func 1", "Func 2", "Func 3"]
-    assert _headers(wb["Maps"], "Master") == \
-        ["ID Alias", "Unique Identifier", "Func 1", "Func 2", "Func 3"]
-    assert _headers(wb["Maps"], "FuncMap") == ["Func Code", "Function Name"]
-    assert _headers(wb["Decoder"], "SolverOutput") == \
-        ["ID Alias", "Function", "Unique Identifier", "Function Name"]
-
-
-def test_decoder_xlookup_formulas(wb):
-    dec = wb["Decoder"]
-    id_formula = dec["C3"].value      # first data row of the two calculated columns
-    func_formula = dec["D3"].value
-    assert id_formula.startswith("=_xlfn.XLOOKUP(") and "Master[ID Alias]" in id_formula
-    assert func_formula.startswith("=_xlfn.XLOOKUP(") and "FuncMap[Func Code]" in func_formula
-    # Unassigned (and any unmapped Function) passes through via XLOOKUP's if_not_found arg.
-    assert func_formula.endswith("[@Function])")
-
-
-def test_committed_template_matches_builder(wb):
-    """The committed frontend/roster-template.xlsx should have the same structure as the builder."""
-    committed = os.path.join(_HERE, "frontend", "roster-template.xlsx")
-    if not os.path.exists(committed):
-        pytest.skip("template not generated/committed yet")
-    cwb = load_workbook(committed)
-    assert cwb.sheetnames == wb.sheetnames
-    assert _headers(cwb["Encoded"], "Encoded") == _headers(wb["Encoded"], "Encoded")
+def test_encoded_advertises_the_upload_schema(wb):
+    headers = _headers(wb, "Encoded")
+    assert headers[0] == "ID Alias"
+    assert headers[1:], "expected at least one Func column"
+    assert all(re.fullmatch(r"Func \d+", str(h)) for h in headers[1:])

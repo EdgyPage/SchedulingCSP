@@ -217,6 +217,10 @@ th, td {
 th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--card); }
 tr td.unassigned { color: var(--muted); font-style: italic; }
 
+/* Compact schema example on the Solver page */
+table.schema { width: auto; margin: 0.25rem 0 0.5rem; }
+table.schema th, table.schema td { text-align: center; padding: 0.35rem 0.75rem; }
+
 footer {
   text-align: center;
   color: var(--muted);
