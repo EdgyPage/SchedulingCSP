@@ -28,9 +28,13 @@ from pydantic import BaseModel
 
 import config
 import io_adapters
+from scoring import METRICS
 from solver import solve
 
 app = FastAPI(title="SchedulingCSP")
+
+# Near-miss search modes exposed to callers (see solver.solve).
+_MODES = ("auto", "fast", "thorough")
 
 app.add_middleware(
     CORSMiddleware,
@@ -66,14 +70,19 @@ class SolveRequest(BaseModel):
     max_schedules: int = 10
     time_budget_s: float | None = None
     seed: int | None = None
+    metric: str = "cosine"
+    mode: str = "auto"
 
 
 class ExportRequest(BaseModel):
     # The schedules_to_json shape: a list of tables, each a list of row dicts.
     schedules: list[list[dict]]
+    # Optional near-miss context (from a solve's ``closest``); when present the exported
+    # file gains a summary sheet/block describing coverage and shortfall.
+    meta: dict | None = None
 
 
-def _validate_inputs(employees, task_names, minimums, max_schedules):
+def _validate_inputs(employees, task_names, minimums, max_schedules, metric="cosine", mode="auto"):
     """Server-side validation shared by every input path. Raises HTTP 400 on violation."""
     if not task_names:
         raise HTTPException(status_code=400, detail="At least one task is required.")
@@ -90,18 +99,26 @@ def _validate_inputs(employees, task_names, minimums, max_schedules):
         if isinstance(value, bool) or not isinstance(value, (int, float)) \
                 or not math.isfinite(value) or value < 0:
             raise HTTPException(status_code=400, detail="Each minimum must be a finite number >= 0.")
+        if not float(value).is_integer():
+            raise HTTPException(status_code=400, detail="Each minimum must be a whole number of people.")
     if max_schedules < 1:
         raise HTTPException(status_code=400, detail="max_schedules must be >= 1.")
+    if metric not in METRICS:
+        raise HTTPException(status_code=400, detail=f"metric must be one of {sorted(METRICS)}.")
+    if mode not in _MODES:
+        raise HTTPException(status_code=400, detail=f"mode must be one of {list(_MODES)}.")
 
 
-def _run_solver(employees, task_names, minimums, max_schedules, time_budget_s, seed):
+def _run_solver(employees, task_names, minimums, max_schedules, time_budget_s, seed,
+                metric="cosine", mode="auto"):
     """Validate, clamp to server ceilings, and run the search. CPU-bound."""
-    _validate_inputs(employees, task_names, minimums, max_schedules)
+    _validate_inputs(employees, task_names, minimums, max_schedules, metric, mode)
+    minimums = [int(m) for m in minimums]          # whole-person headcounts (validated above)
     result = solve(
         employees, minimums,
         config.effective_max_schedules(max_schedules),
         time_budget_s=config.effective_time_budget(time_budget_s),
-        seed=seed,
+        seed=seed, metric=metric, mode=mode,
     )
     return {"tasks": task_names, **result}
 
@@ -135,6 +152,7 @@ def solve_from_form(req: SolveRequest):
     # Sync endpoint => FastAPI already runs it in a worker thread.
     return _run_solver(
         employees, task_names, req.minimums, req.max_schedules, req.time_budget_s, req.seed,
+        req.metric, req.mode,
     )
 
 
@@ -145,6 +163,8 @@ async def solve_from_file(
     max_schedules: int = Form(10),
     time_budget_s: float | None = Form(None),
     seed: int | None = Form(None),
+    metric: str = Form("cosine"),
+    mode: str = Form("auto"),
 ):
     """Solve from an uploaded roster (.xlsx or .csv). ``minimums`` is a JSON array."""
     if file.size is not None and file.size > config.MAX_UPLOAD_BYTES:
@@ -165,6 +185,7 @@ async def solve_from_file(
         raise HTTPException(status_code=400, detail=str(exc))
     return await run_in_threadpool(
         _run_solver, employees, task_names, mins, max_schedules, time_budget_s, seed,
+        metric, mode,
     )
 
 
@@ -191,11 +212,11 @@ async def inspect_file(file: UploadFile = File(...)):
 def export(req: ExportRequest, format: str = "xlsx"):
     """Serialize already-computed schedules to a downloadable, injection-safe file."""
     if format == "xlsx":
-        data = io_adapters.results_to_xlsx_bytes(req.schedules)
+        data = io_adapters.results_to_xlsx_bytes(req.schedules, req.meta)
         media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         filename = "schedules.xlsx"
     elif format == "csv":
-        data = io_adapters.results_to_csv_bytes(req.schedules)
+        data = io_adapters.results_to_csv_bytes(req.schedules, req.meta)
         media = "text/csv"
         filename = "schedules.csv"
     else:
