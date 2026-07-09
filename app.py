@@ -109,8 +109,8 @@ def _run_solver(employees, task_names, minimums, max_schedules, time_budget_s, s
 def _parse_upload(filename, content):
     """Parse an uploaded roster into ``(employees, task_names)`` by file extension.
 
-    Shared by /api/solve/file and /api/inspect. CPU/IO-bound (pandas read); callers
-    run it in a threadpool. Raises ValueError on an unsupported extension.
+    Shared by /api/solve/file and /api/inspect. CPU/IO-bound (spreadsheet/CSV read);
+    callers run it in a threadpool. Raises ValueError on an unsupported extension.
     """
     name = (filename or "").lower()
     if name.endswith(".csv"):

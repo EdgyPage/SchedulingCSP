@@ -121,7 +121,7 @@ def test_committed_dataset_matches_builder(roster, tmp_path):
     spec.loader.exec_module(builder)
 
     regen = tmp_path / "regen.csv"
-    builder.build_dataframe().to_csv(regen, index=False, lineterminator="\n")
+    builder.write_csv(builder.build_rows(), str(regen))
     emp_r, tasks_r = ia.parse_roster_csv(regen.read_bytes())
 
     assert tasks_r == tasks == builder.TASKS

@@ -1,7 +1,7 @@
 import io
 
-import pandas as pd
 import pytest
+from openpyxl import load_workbook
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
@@ -36,8 +36,10 @@ def test_json_is_not_sanitized_but_exports_are():
     assert b"'=name" in csv and b"'=id" in csv
 
     xlsx = ia.results_to_xlsx_bytes(tables)
-    back = pd.read_excel(io.BytesIO(xlsx), sheet_name="Schedule_1")
-    assert back.iloc[0]["Name"] == "'=name"
+    ws = load_workbook(io.BytesIO(xlsx))["Schedule_1"]
+    header = [cell.value for cell in ws[1]]
+    first = dict(zip(header, [cell.value for cell in ws[2]]))
+    assert first["Name"] == "'=name"
 
 
 @pytest.mark.parametrize("dangerous", ["=1+1", "+1", "-1", "@SUM(A1)", "\tx", "\rx"])
