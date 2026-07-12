@@ -14,7 +14,6 @@ Spreadsheet/CSV I/O uses ``openpyxl`` and the stdlib ``csv`` module -- no pandas
 
 import csv
 import io
-from datetime import datetime
 
 from openpyxl import Workbook, load_workbook
 
@@ -90,7 +89,7 @@ def parse_roster_records(records: list[dict], columns: list[str]):
         emp_id = _coerce_id(raw_id)
         statuses = [_to_bool(row.get(task)) for task in task_names]
         # No name is uploaded; the alias itself is the only identity we keep.
-        employees.append(Employee(emp_id, str(emp_id), list(task_names), statuses))
+        employees.append(Employee(emp_id, list(task_names), statuses))
     return employees, task_names
 
 
@@ -137,7 +136,7 @@ def parse_roster_form(payload: dict):
         ids.append(emp_id)
         statuses = _approved_to_statuses(entry.get("approved", []), task_names)
         # No name is accepted from the form either; identity is the alias only.
-        employees.append(Employee(emp_id, str(emp_id), list(task_names), statuses))
+        employees.append(Employee(emp_id, list(task_names), statuses))
     screen_id_permutation(ids)               # ids must be a 1..n permutation
     return employees, task_names
 
@@ -247,20 +246,3 @@ def results_to_csv_bytes(results: list[list[dict]], meta: dict | None = None) ->
         for row in _sanitize_table(table):
             writer.writerow([i] + [row.get(col) for col in _OUTPUT_COLUMNS])
     return buffer.getvalue().encode("utf-8")
-
-
-def write_schedules_to_excel_files(schedules: list[dict], filePath: str = "") -> list[str]:
-    """Legacy/local convenience: write one .xlsx file per schedule to disk."""
-    paths = []
-    for i, assignment in enumerate(schedules, start=1):
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        path = f"{filePath}_Schedule_{i}_{timestamp}.xlsx"
-        wb = Workbook()
-        ws = wb.active
-        ws.title = f"Schedule_{i}"
-        ws.append(_OUTPUT_COLUMNS)
-        for row in _sanitize_table(_schedule_to_rows(assignment)):
-            ws.append([row.get(col) for col in _OUTPUT_COLUMNS])
-        wb.save(path)
-        paths.append(path)
-    return paths

@@ -19,6 +19,7 @@ const els = {
   loading: document.getElementById("loading"),
   error: document.getElementById("error"),
   resultsCard: document.getElementById("results-card"),
+  solveNotice: document.getElementById("solve-notice"),
   resultsSummary: document.getElementById("results-summary"),
   resultsControls: document.getElementById("results-controls"),
   scheduleSelect: document.getElementById("schedule-select"),
@@ -166,6 +167,17 @@ els.solve.addEventListener("click", async () => {
 
 function renderResults(result) {
   els.resultsCard.hidden = false;
+
+  // The server caps how many schedules it will return; say so if the request was reduced.
+  if (result.capped) {
+    els.solveNotice.textContent =
+      `This server caps results at ${result.capped.applied} schedule(s); ` +
+      `your request for ${result.capped.requested} was reduced.`;
+    els.solveNotice.hidden = false;
+  } else {
+    els.solveNotice.hidden = true;
+  }
+
   const count = result.count || 0;
 
   if (count > 0) {

@@ -18,7 +18,6 @@ import time
 import employee as e
 import constraints as c
 from scoring import rank_key
-from io_adapters import write_schedules_to_excel_files
 
 # Safety backstop for the relaxed close search when the caller sets no budget at all
 # (the web layer always passes a time budget; direct solve() calls may not).
@@ -146,15 +145,6 @@ class Schedule:
 
     # --- constraint tests -------------------------------------------------------
 
-    def partialTestDecorator(func):
-        func.isPartialTest = True
-        return func
-
-    def fullTestDecorator(func):
-        func.isFullTest = True
-        return func
-
-    @partialTestDecorator
     def testLengthPartial(self):
         """Prune branches where a task has already exceeded its target headcount."""
         for i, (key, value) in enumerate(self.taskAssignments.items()):
@@ -164,7 +154,6 @@ class Schedule:
                 return False
         return True
 
-    @partialTestDecorator
     def testTaskMins(self):
         """Prune branches where the remaining talent pool can't reach a task's min."""
         for i, (key, value) in enumerate(self.taskAssignments.items()):
@@ -176,7 +165,6 @@ class Schedule:
                 return False
         return True
 
-    @fullTestDecorator
     def testLengthFull(self):
         """A schedule is complete only when every task hits its target exactly."""
         for i, (key, value) in enumerate(list(self.taskAssignments.items())[1:]):
@@ -185,17 +173,12 @@ class Schedule:
         return True
 
     def _cache_tests(self):
-        """Discover the decorated constraint methods once instead of on every node."""
-        self._partial_tests = []
-        self._full_tests = []
-        for name in dir(self):
-            method = getattr(self, name)
-            if not callable(method):
-                continue
-            if getattr(method, 'isPartialTest', False):
-                self._partial_tests.append(method)
-            elif getattr(method, 'isFullTest', False):
-                self._full_tests.append(method)
+        """Bind the constraint tests once instead of re-resolving them per node.
+
+        Partial tests prune during the search; full tests confirm a complete schedule.
+        """
+        self._partial_tests = (self.testLengthPartial, self.testTaskMins)
+        self._full_tests = (self.testLengthFull,)
 
     def partialTest(self):
         return all(test() for test in self._partial_tests)
@@ -380,10 +363,3 @@ class Schedule:
             heapq.heappush(self._close_heap, (reversed_key, payload))
         else:
             heapq.heappushpop(self._close_heap, (reversed_key, payload))
-
-    def writeAssignmentsToExcel(self, filePath: str = ''):
-        """Convenience for local/notebook use: write one .xlsx per schedule to disk.
-
-        Web callers should use the in-memory serializers in ``io_adapters`` instead.
-        """
-        write_schedules_to_excel_files(self._validSchedules, filePath)

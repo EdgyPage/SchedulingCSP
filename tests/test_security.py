@@ -27,7 +27,7 @@ VALID_PAYLOAD = {
 def test_json_is_not_sanitized_but_exports_are():
     # The parse path can't carry these (screening blocks non-Func columns), but the
     # /api/export endpoint accepts arbitrary rows, so the serializers must still sanitize.
-    emp = e.Employee("=id", "=id", ["=func"], [True])
+    emp = e.Employee("=id", ["=func"], [True])
     internal = [{"=func": [emp], "Unassigned": []}]
 
     tables = ia.schedules_to_json(internal)
@@ -139,3 +139,18 @@ def test_happy_path_still_works(monkeypatch):
     body = r.json()
     assert body["count"] >= 1
     assert body["tasks"] == ["Func 1", "Func 2"]
+
+
+def test_max_schedules_cap_is_surfaced(monkeypatch):
+    monkeypatch.setattr(config, "API_KEY", None)
+    client = TestClient(app)
+
+    requested = config.MAX_SCHEDULES + 100
+    over = {**VALID_PAYLOAD, "max_schedules": requested}
+    body = client.post("/api/solve", json=over).json()
+    assert body["capped"] == {"requested": requested, "applied": config.MAX_SCHEDULES}
+    assert len(body["schedules"]) <= config.MAX_SCHEDULES
+
+    # A request within the cap carries no notice.
+    within = {**VALID_PAYLOAD, "max_schedules": 2}
+    assert "capped" not in client.post("/api/solve", json=within).json()

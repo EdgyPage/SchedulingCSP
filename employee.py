@@ -1,7 +1,6 @@
 class Employee:
-    def __init__(self, id: str, name: str, tasks:list[str], taskStatuses: list[bool]):
+    def __init__(self, id: str, tasks:list[str], taskStatuses: list[bool]):
         self._id = id
-        self._name = name
         self._numApprovedTasks = 0
         self._indexApprovedTasks = [0]
         self.tasks = tasks
@@ -22,14 +21,6 @@ class Employee:
     @id.setter
     def id(self, value: str):
         self._id = value
-
-    @property
-    def name(self):
-        return self._name
-    
-    @name.setter
-    def name(self, value: str):
-        self._name = value.lower()
 
     @property
     def taskStatuses(self):
@@ -61,8 +52,7 @@ class Employee:
 
     def __repr__(self):
         return f"""
-                id: {self.id}, 
-                 name: {self.name}, 
+                id: {self.id},
                  taskStatuses: {self._taskStatuses}
                 """
     
@@ -80,4 +70,4 @@ class Employee:
         return flag
     
     def __hash__(self):
-        return hash((self.name, self.id, tuple(self.taskStatuses)))
+        return hash((self.id, tuple(self.taskStatuses)))

@@ -6,16 +6,16 @@ from solver import solve
 TASKS = ["A", "B", "C"]
 
 
-def make_emp(emp_id, name, approved_flags):
-    return e.Employee(emp_id, name, list(TASKS), list(approved_flags))
+def make_emp(emp_id, approved_flags):
+    return e.Employee(emp_id, list(TASKS), list(approved_flags))
 
 
 def test_employee_approved_for_all_tasks_does_not_crash():
     # Bug 1: the bucket list was one slot too short, so an employee approved for
     # every task raised IndexError during Schedule construction.
     emps = [
-        make_emp(1, "all", [True, True, True]),
-        make_emp(2, "b", [False, True, False]),
+        make_emp(1, [True, True, True]),
+        make_emp(2, [False, True, False]),
     ]
     sched = s.Schedule(emps, c.Constraints([1, 1, 0]), 1)
     assert sched is not None
@@ -24,8 +24,8 @@ def test_employee_approved_for_all_tasks_does_not_crash():
 def test_zero_approval_employee_lands_in_unassigned():
     # Bug 2: employees approved for no task were silently dropped from output.
     emps = [
-        make_emp(1, "qual", [True, False, False]),
-        make_emp(2, "nobody", [False, False, False]),
+        make_emp(1, [True, False, False]),
+        make_emp(2, [False, False, False]),
     ]
     result = solve(emps, [1, 0, 0], max_schedules=1)
     assert result["count"] >= 1
@@ -36,7 +36,7 @@ def test_zero_approval_employee_lands_in_unassigned():
 
 def test_employee_setter_is_idempotent():
     # Bug 5: re-assigning taskStatuses used to double the counters.
-    emp = make_emp(1, "x", [True, False, True])
+    emp = make_emp(1, [True, False, True])
     assert emp.numApprovedTasks == 2
     assert emp.indexApprovedTasks == [0, 1, 3]
 
@@ -47,10 +47,10 @@ def test_employee_setter_is_idempotent():
 
 def test_schedules_hit_exact_minimums():
     emps = [
-        make_emp(1, "a", [True, False, False]),
-        make_emp(2, "b", [True, True, False]),
-        make_emp(3, "c", [False, True, True]),
-        make_emp(4, "d", [False, False, True]),
+        make_emp(1, [True, False, False]),
+        make_emp(2, [True, True, False]),
+        make_emp(3, [False, True, True]),
+        make_emp(4, [False, False, True]),
     ]
     minimums = [1, 1, 1]
     result = solve(emps, minimums, max_schedules=5, seed=0)
@@ -65,7 +65,7 @@ def test_schedules_hit_exact_minimums():
 
 def test_time_budget_returns_without_error():
     # Larger fixture, tiny budget: must return promptly with best-effort results.
-    emps = [make_emp(i, f"e{i}", [True, True, True]) for i in range(20)]
+    emps = [make_emp(i, [True, True, True]) for i in range(20)]
     result = solve(emps, [3, 3, 3], max_schedules=100, time_budget_s=0.05, seed=0)
     assert result["count"] >= 0
     assert result["count"] <= 100
@@ -76,9 +76,9 @@ def test_time_budget_returns_without_error():
 def test_infeasible_returns_diagnostics_and_closest():
     # C needs 3 but only employee 3 can do it -> pool shortfall.
     emps = [
-        make_emp(1, "a", [True, False, False]),
-        make_emp(2, "b", [False, True, False]),
-        make_emp(3, "c", [False, False, True]),
+        make_emp(1, [True, False, False]),
+        make_emp(2, [False, True, False]),
+        make_emp(3, [False, False, True]),
     ]
     result = solve(emps, [1, 1, 3], max_schedules=5, seed=0)
     assert result["count"] == 0 and result["schedules"] == []
@@ -101,7 +101,7 @@ def test_infeasible_returns_diagnostics_and_closest():
 
 
 def test_feasible_result_has_no_closest_or_infeasibility():
-    emps = [make_emp(i, "x", [True, True, True]) for i in (1, 2, 3)]
+    emps = [make_emp(i, [True, True, True]) for i in (1, 2, 3)]
     result = solve(emps, [1, 1, 1], max_schedules=5, seed=0)
     assert result["count"] >= 1
     assert "closest" not in result
@@ -111,9 +111,9 @@ def test_feasible_result_has_no_closest_or_infeasibility():
 def test_modes_fast_thorough_auto():
     # C is pool-short (needs 2, only employee 3 can do it) -> fast prunes it at the root.
     emps = [
-        make_emp(1, "a", [True, False, False]),
-        make_emp(2, "b", [False, True, False]),
-        make_emp(3, "c", [False, False, True]),
+        make_emp(1, [True, False, False]),
+        make_emp(2, [False, True, False]),
+        make_emp(3, [False, False, True]),
     ]
     mins = [1, 1, 2]
     fast = solve(emps, mins, seed=0, mode="fast")
@@ -129,7 +129,7 @@ def test_modes_fast_thorough_auto():
 def test_fast_mode_handles_contention():
     # All-qualified trio, target [2,2,0]: each task is reachable, so fast (which keeps the
     # feasibility pruning) still finds near-misses without escalating.
-    emps = [make_emp(i, "x", [True, True, False]) for i in (1, 2, 3)]
+    emps = [make_emp(i, [True, True, False]) for i in (1, 2, 3)]
     result = solve(emps, [2, 2, 0], seed=0, mode="fast")
     assert result["count"] == 0
     assert result["closest"]["mode"] == "fast"
@@ -138,10 +138,10 @@ def test_fast_mode_handles_contention():
 
 def test_metric_parameter_is_threaded_and_ranks_by_it():
     emps = [
-        make_emp(1, "a", [True, False, True]),
-        make_emp(2, "b", [False, True, True]),
-        make_emp(3, "c", [False, False, True]),
-        make_emp(4, "d", [False, False, True]),
+        make_emp(1, [True, False, True]),
+        make_emp(2, [False, True, True]),
+        make_emp(3, [False, False, True]),
+        make_emp(4, [False, False, True]),
     ]
     for metric in ("cosine", "l1"):
         result = solve(emps, [1, 1, 6], max_schedules=5, seed=0, mode="thorough", metric=metric)
@@ -151,7 +151,7 @@ def test_metric_parameter_is_threaded_and_ranks_by_it():
 
 
 def test_close_schedules_are_deduplicated():
-    emps = [make_emp(i, "x", [True, True, False]) for i in (1, 2, 3)]   # 3 employees do A,B
+    emps = [make_emp(i, [True, True, False]) for i in (1, 2, 3)]   # 3 employees do A,B
     result = solve(emps, [2, 2, 0], max_schedules=20, seed=0, mode="thorough")
     seen = set()
     for s in result["closest"]["schedules"]:
@@ -163,7 +163,7 @@ def test_close_schedules_are_deduplicated():
 def test_close_search_respects_budget_and_cap():
     # 20 all-qualified employees, 30 requested slots -> understaffed; a tiny budget must
     # return promptly with at most max_schedules candidates and no explosion.
-    emps = [make_emp(i, f"e{i}", [True, True, True]) for i in range(20)]
+    emps = [make_emp(i, [True, True, True]) for i in range(20)]
     result = solve(emps, [10, 10, 10], max_schedules=8, time_budget_s=0.05, seed=0, mode="thorough")
     assert result["count"] == 0
     if "closest" in result:

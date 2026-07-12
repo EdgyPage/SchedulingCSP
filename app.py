@@ -114,13 +114,18 @@ def _run_solver(employees, task_names, minimums, max_schedules, time_budget_s, s
     """Validate, clamp to server ceilings, and run the search. CPU-bound."""
     _validate_inputs(employees, task_names, minimums, max_schedules, metric, mode)
     minimums = [int(m) for m in minimums]          # whole-person headcounts (validated above)
+    applied = config.effective_max_schedules(max_schedules)
     result = solve(
-        employees, minimums,
-        config.effective_max_schedules(max_schedules),
+        employees, minimums, applied,
         time_budget_s=config.effective_time_budget(time_budget_s),
         seed=seed, metric=metric, mode=mode,
     )
-    return {"tasks": task_names, **result}
+    payload = {"tasks": task_names, **result}
+    # Tell the caller when the server cap reduced their requested schedule count, so a
+    # silently-clamped request (e.g. 500 -> 50) isn't mistaken for the full ask.
+    if max_schedules > applied:
+        payload["capped"] = {"requested": max_schedules, "applied": applied}
+    return payload
 
 
 def _parse_upload(filename, content):
