@@ -18,6 +18,7 @@ import time
 import employee as e
 import constraints as c
 from scoring import rank_key
+from io_adapters import write_schedules_to_excel_files
 
 # Safety backstop for the relaxed close search when the caller sets no budget at all
 # (the web layer always passes a time budget; direct solve() calls may not).
@@ -30,7 +31,7 @@ class Schedule:
                  max_nodes: int | None = None):
         self._rng = random.Random(seed)
         self.tasks = employeesToAssign[0].tasks
-        self.taskAssignments = None            # setter ignores the value; builds empty buckets
+        self._reset_assignments()
         self._task_keys = list(self._taskAssignments.keys())
         self.constraints = constraints
         self._validSchedules = []
@@ -39,8 +40,8 @@ class Schedule:
         # _initialEmployees must hold ALL employees (including anyone approved for zero
         # tasks) so findUnassignedEmployees can sweep them into 'Unassigned' at the end.
         self._initialEmployees = list(employeesToAssign)
-        self.employeesToAssign = employeesToAssign   # bucketed working list (qualified only)
-        self.maxPossibleAssignment = employeesToAssign
+        self._bucket_employees(employeesToAssign)    # bucketed working list (qualified only)
+        self._compute_max_possible(employeesToAssign)
         # runtime budget
         self._time_budget_s = time_budget_s
         self._max_nodes = max_nodes
@@ -95,18 +96,17 @@ class Schedule:
     def taskAssignments(self):
         return self._taskAssignments
 
-    @taskAssignments.setter
-    def taskAssignments(self, value):
-        # The argument only signals "(re)initialize"; the buckets are derived from
-        # self.tasks. Index 0 is the catch-all 'Unassigned' bucket.
+    def _reset_assignments(self):
+        # (Re)initialize empty task buckets derived from self.tasks. Index 0 is the
+        # catch-all 'Unassigned' bucket.
         self._taskAssignments = {'Unassigned': []} | {task: [] for task in self.tasks}
 
     @property
     def employeesToAssign(self):
         return self._employeesToAssign
 
-    @employeesToAssign.setter
-    def employeesToAssign(self, employees):
+    def _bucket_employees(self, employees):
+        """Build the working list from ``employees``, most-constrained-first."""
         num_tasks = len(employees[0].taskStatuses)
         # Bucket by number of approved tasks. Size is num_tasks + 1 so an employee
         # approved for *every* task (numApprovedTasks == num_tasks) has a slot.
@@ -124,8 +124,8 @@ class Schedule:
     def maxPossibleAssignment(self):
         return self._maxPossibleAssignment
 
-    @maxPossibleAssignment.setter
-    def maxPossibleAssignment(self, employees):
+    def _compute_max_possible(self, employees):
+        """Recompute per-task remaining-talent counts from ``employees``."""
         maxAssignments = {key: 0 for key in self._task_keys}
         for employee in employees:
             for index in employee.indexApprovedTasks:
@@ -276,8 +276,8 @@ class Schedule:
         ``(assignment, coverage, distance)`` ordered closest-first.
         """
         # Reset the working state (defensive: it is already clean after a full search).
-        self.taskAssignments = None
-        self.maxPossibleAssignment = self._initialEmployees
+        self._reset_assignments()
+        self._compute_max_possible(self._initialEmployees)
 
         self._close_top_n = max(1, top_n)
         self._close_metric = metric_fn
@@ -386,5 +386,4 @@ class Schedule:
 
         Web callers should use the in-memory serializers in ``io_adapters`` instead.
         """
-        from io_adapters import write_schedules_to_excel_files
         write_schedules_to_excel_files(self._validSchedules, filePath)

@@ -227,6 +227,7 @@ footer {
   font-size: 0.82rem;
   padding: 1rem;
 }
+footer a { color: var(--accent); }
 
 /* Top navigation (Solver / Instructions) */
 .nav {
@@ -272,3 +273,6 @@ footer {
   font-weight: 600;
   text-decoration: none;
 }
+/* Win over `.card a` (higher specificity) so the label isn't drawn in --accent
+   over an --accent background, which renders it invisible. */
+.card a.download-btn { color: var(--accent-text); }

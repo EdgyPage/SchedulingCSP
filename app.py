@@ -137,6 +137,24 @@ def _parse_upload(filename, content):
     raise ValueError("Upload a .xlsx or .csv file.")
 
 
+async def _read_and_parse_upload(file):
+    """Enforce the upload size cap and parse the roster into ``(employees, task_names)``.
+
+    Shared guard for /api/solve/file and /api/inspect. Raises 413 if the file is too
+    large and 400 if it can't be parsed. Parsing is CPU/IO-bound, so it runs in a
+    threadpool to keep one heavy request from stalling the event loop.
+    """
+    if file.size is not None and file.size > config.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Uploaded file too large.")
+    content = await file.read()
+    if len(content) > config.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Uploaded file too large.")
+    try:
+        return await run_in_threadpool(_parse_upload, file.filename, content)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @app.post("/api/solve", dependencies=[Depends(require_api_key)])
 def solve_from_form(req: SolveRequest):
     """Solve from form-entered data (JSON body)."""
@@ -167,22 +185,14 @@ async def solve_from_file(
     mode: str = Form("auto"),
 ):
     """Solve from an uploaded roster (.xlsx or .csv). ``minimums`` is a JSON array."""
-    if file.size is not None and file.size > config.MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Uploaded file too large.")
-    content = await file.read()
-    if len(content) > config.MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Uploaded file too large.")
     try:
         mins = json.loads(minimums)
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="minimums must be a JSON array.")
 
-    # Parsing and solving are CPU/IO-bound; keep them off the event loop so one
-    # heavy request can't stall every other connection.
-    try:
-        employees, task_names = await run_in_threadpool(_parse_upload, file.filename, content)
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    employees, task_names = await _read_and_parse_upload(file)
+    # Solving is CPU-bound; keep it off the event loop so one heavy request can't
+    # stall every other connection.
     return await run_in_threadpool(
         _run_solver, employees, task_names, mins, max_schedules, time_budget_s, seed,
         metric, mode,
@@ -196,15 +206,7 @@ async def inspect_file(file: UploadFile = File(...)):
     The UI calls this first so it can render one target-headcount input per task
     before the user solves. Same upload guards as /api/solve/file.
     """
-    if file.size is not None and file.size > config.MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Uploaded file too large.")
-    content = await file.read()
-    if len(content) > config.MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Uploaded file too large.")
-    try:
-        employees, task_names = await run_in_threadpool(_parse_upload, file.filename, content)
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    employees, task_names = await _read_and_parse_upload(file)
     return {"tasks": task_names, "employee_count": len(employees)}
 
 

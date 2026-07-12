@@ -3,7 +3,10 @@
     "allow": [
       "Bash(git checkout *)",
       "Bash(git branch *)",
-      "Bash(python -c \"import openpyxl, fastapi, pydantic; print\\('openpyxl', openpyxl.__version__\\)\")"
+      "Bash(python -c \"import openpyxl, fastapi, pydantic; print\\('openpyxl', openpyxl.__version__\\)\")",
+      "Bash(python datasets/build_edge_cases.py)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }

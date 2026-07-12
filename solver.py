@@ -20,7 +20,7 @@ def solve(employees, minimums, max_schedules=10, *,
           time_budget_s=None, max_nodes=None, seed=None, metric="cosine", mode="auto"):
     """Run the CSP and return ``{"count": int, "schedules": [[row, ...], ...]}``.
 
-    Each row is ``{"Name", "ID", "Function"}``. The search is bounded by
+    Each row is ``{"ID Alias", "Function"}``. The search is bounded by
     ``max_schedules`` and, optionally, ``time_budget_s`` / ``max_nodes``.
 
     On complete failure (no exact schedule) the result also carries:

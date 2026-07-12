@@ -1,5 +1,7 @@
 # SchedulingCSP
 
+**Live demo:** https://SchedulingCSP.OnRender.com · **Source:** https://github.com/EdgyPage/SchedulingCSP
+
 ## Overview
 A small constraint-satisfaction-problem (CSP) solver that assigns employees to tasks based
 on which tasks they are trained/approved for. Given a per-task target headcount, it searches
